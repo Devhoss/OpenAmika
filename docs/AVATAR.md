@@ -27,8 +27,9 @@ avatar/models/MyChar/
   fly (otherwise pixi-live2d-display would ignore them).
 - Rescan on Setup → Avatar; the Use page's model picker switches models as a stage swap (both stay
   preloaded).
-- Models are licensed assets and are **gitignored** — every user brings their own (Cubism Editor
-  exports, or Live2D's sample models under their license).
+- Models are licensed assets and are **gitignored**: Amika's comes from `scripts/setup_tts.py` (personal-use
+  license), any other model you bring yourself (Cubism Editor exports, or Live2D's sample models under their
+  license).
 
 ## Emotion banks
 

@@ -750,3 +750,63 @@ details.oa-details > .inner { padding: 4px 16px 16px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ───────────────────────── Support MekaHime (popup on Use, card on About) ───────────────────────── */
+.donate-giant {
+  display: block; padding: 22px 16px; border-radius: 16px;
+  font-family: var(--font-body); font-size: 24px; font-weight: 700; letter-spacing: .04em; text-decoration: none;
+  color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  background: linear-gradient(90deg, #e58fb8, var(--primary) 55%, var(--lavender));
+  box-shadow: 0 10px 30px rgba(216, 180, 226, .3);
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease);
+}
+.donate-giant:hover { color: #fff; transform: translateY(-2px) scale(1.01); box-shadow: 0 14px 36px rgba(216, 180, 226, .5); }
+.donate-card {
+  text-align: center; --tc-glow: rgba(229, 143, 184, .22);
+  background: linear-gradient(135deg, rgba(229, 143, 184, .12), rgba(200, 168, 224, .1));
+  border-color: rgba(216, 180, 226, .35);
+}
+.donate-sub { margin: 10px 0 0; color: var(--pearl); font-size: 14.5px; line-height: 1.55; }
+
+#donate-modal {
+  position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(10, 5, 14, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: oa-donate-in .25s ease;
+}
+#donate-modal[hidden] { display: none; }
+@keyframes oa-donate-in { from { opacity: 0; } to { opacity: 1; } }
+#donate-modal .modal {
+  position: relative; width: min(460px, 100%); padding: 26px 24px 18px; text-align: center; border-radius: 20px;
+  background: linear-gradient(160deg, rgba(48, 26, 52, .97), rgba(20, 9, 26, .98));
+  border: 1px solid rgba(216, 180, 226, .35); box-shadow: 0 24px 70px rgba(0, 0, 0, .6);
+}
+#donate-modal .modal-logo { width: 200px; max-width: 70%; display: block; margin: 0 auto 10px; filter: drop-shadow(0 2px 10px rgba(0, 0, 0, .45)); }
+#donate-modal p { margin: 8px 0; font-size: 15px; line-height: 1.5; color: var(--pearl); }
+#donate-modal p.muted { color: var(--muted); }
+#donate-modal .donate-giant { margin-top: 14px; }
+#donate-modal .modal-actions { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
+#donate-modal .modal-actions .link {
+  font-family: var(--font-body); font-size: 13px; color: var(--muted); background: none; border: 0; padding: 4px;
+  cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
+}
+#donate-modal .modal-actions .link:hover { color: var(--pearl); }
+#donate-modal .modal-close {
+  position: absolute; top: 8px; right: 10px; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  font-size: 20px; line-height: 1; background: transparent; border: 0; color: var(--muted); cursor: pointer;
+}
+#donate-modal .modal-close:hover { color: var(--pearl); background: rgba(255, 255, 255, .08); }
+
+/* About page */
+.about-col { max-width: 880px; display: grid; gap: 16px; }
+.about-page .tech-card p { margin: 0 0 10px; color: var(--pearl); }
+.about-page .tech-card h4 { font-size: 14px; font-weight: 600; letter-spacing: .06em; color: var(--lavender); margin: 18px 0 8px; }
+.about-page .tech-card ul { margin: 4px 0 10px; padding-left: 20px; }
+.about-page .tech-card li { margin: 4px 0; }
+.about-page .tech-card a:not(.donate-giant):not(.about-logo) { border-bottom: 1px dotted rgba(216, 180, 226, .5); }
+.about-logo { display: block; width: 220px; max-width: 70%; margin: 4px auto 14px; }
+.about-logo img { width: 100%; display: block; filter: drop-shadow(0 2px 10px rgba(0, 0, 0, .45)); transition: opacity .15s; }
+.about-logo:hover img { opacity: .85; }
+.oa-table.lic td { vertical-align: top; }
+.oa-table.lic td.free { color: var(--ok); font-weight: 700; white-space: nowrap; }
+.oa-table.lic td.own { color: var(--warn); font-weight: 700; }
+.about-fine { margin: 4px 2px 0; }

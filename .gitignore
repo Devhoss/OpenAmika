@@ -63,3 +63,12 @@ desktop.ini
 certs/
 *.pem
 *.key
+
+# voice server: only the server code and its docs are in git. scripts/setup_tts.py builds the rest
+# (.venv/, GPT-SoVITS/, ffmpeg/, nltk_data/, Speakers/, cache/, downloads/) from public sources.
+vendor/tts-engine/*
+!vendor/tts-engine/main.py
+!vendor/tts-engine/requirements-tts.txt
+!vendor/tts-engine/README.md
+!vendor/tts-engine/LICENSE
+!vendor/tts-engine/THIRD_PARTY_NOTICES.md

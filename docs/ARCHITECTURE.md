@@ -15,8 +15,8 @@ Interactive version: open **/flow** in the running app (pan/zoom node map with f
         │ Socket.IO client                              │ Socket.IO client
         ▼                                               ▼
 ┌───────────────────────────────┐        ┌──────────────────────────────────┐
-│  BRAIN  brain/webui.py        │        │  TTS server (external, :8002)    │
-│  Flask-SocketIO · port 5202   │        │  e.g. Vanadis Evo (GPT-SoVITS)   │
+│  BRAIN  brain/webui.py        │        │  TTS: her voice server (:8002)   │
+│  Flask-SocketIO · port 5202   │        │  vendor/tts-engine (GPT-SoVITS)  │
 │  surface/deep/reflection      │        │  tts_request_gateway→audio_ready │
 │  prompts (cache-first)        │        └──────────────────────────────────┘
 │  evidence memory (memory_f/)  │

@@ -1,13 +1,15 @@
-# TTS: the contract, your server, and the voice adapter
+# TTS: the contract, the voice server, and the voice adapter
 
-**No TTS server and no voice ship with OpenAmika.** Her voice comes from any server that speaks the small
-Socket.IO contract below; point `settings.json → tts_url` at it. Without one she still works: her replies
-appear as text (live subtitles), the Live2D avatar still acts them out, and the launcher shows the TTS row
-yellow ("she will not speak").
+**Her voice is one command away.** `python scripts/setup_tts.py` installs the OpenAmika voice server
+(`vendor/tts-engine`, a MekaHime build of GPT-SoVITS, MIT) together with Amika's voice and her Live2D model from
+Hugging Face (personal-use license, 18+; the script shows it and asks you to accept it first), and
+`settings.example.json` already has the launcher start that server on port 8002. Without a voice server she still
+works: her replies appear as text (live subtitles), the Live2D avatar still acts them out, and the launcher shows
+the TTS row yellow ("she will not speak").
 
 ## The contract the speech layer speaks
 
-OpenAmika's speech layer is a **Socket.IO client** to your TTS server (`settings.json → tts_url`).
+OpenAmika's speech layer is a **Socket.IO client** to the TTS server (`settings.json → tts_url`).
 With the default settings (voice adapter ON → old-vocabulary voice ids), the wire looks like:
 
 ```jsonc
@@ -16,12 +18,12 @@ With the default settings (voice adapter ON → old-vocabulary voice ids), the w
   "task_id":      "uuid",
   "turn_id":      "<brain turn>-<idx>",
   "text":         "【happy2】.今日もおつかれさま。",   // emotion tag first, then the sentence
-  "character_id": "Amika2",                              // settings.json → tts_character (adapter may swap it)
+  "character_id": "MekaHime_Amika",                      // settings.json → tts_character (adapter may swap it)
   "audio_format": "wav",                                  // browsers decode containers, not raw opus
   "language":     "Japanese"                              // optional: Chinese | English | Japanese
 }
 
-// on("audio_ready")   — one per request, broadcast (filter by task_id)
+// on("audio_ready")   — one per request (filter by task_id)
 { "task_id", "turn_id", "audio": <bytes>, "audio_format", "audio_duration", "text", "is_final": true }
 // plus "task_queued" (accepted) and "error" { task_id, turn_id, error }
 ```
@@ -30,14 +32,31 @@ With the default settings (voice adapter ON → old-vocabulary voice ids), the w
 - `GET /ping` answering `ok` is what the launcher and the Setup page poll for health.
 - `audio` is the encoded file (WAV by default); `audio_duration` is in seconds.
 
-Anything that implements this works. MekaHime's own reference server, **Vanadis Evo** (a GPT-SoVITS
-v2ProPlus serving layer), and Amika's voices are MekaHime assets and are not distributed with this
-repository. Wrapping an open TTS engine (for example GPT-SoVITS, MIT) in a ~100-line Socket.IO server that
-answers `tts_request_gateway` with `audio_ready` is enough; pick the reference clip from the leading
-`【emotion】` tag if your engine supports emotion prompts, or ignore the tag.
+## The OpenAmika voice server
 
-The launcher can start your server with everything else: describe it under `services.tts` in
-`settings.json` (command, cwd, health URL) and set `enabled: true`.
+OpenAmika ships its own: the **OpenAmika voice server** (`vendor/tts-engine/main.py`, a MekaHime build of
+GPT-SoVITS v2ProPlus, MIT), derived from the OpenSakura voice server. One command installs it with Amika's voice:
+
+```text
+python scripts\setup_tts.py          type yes to accept her license; --cpu without an NVIDIA GPU
+```
+
+- It builds `vendor/tts-engine/` from public sources: a Python 3.11 venv with CUDA 12.8 torch, upstream
+  GPT-SoVITS at a pinned commit with its pretrained models, and Amika's voice from the Hugging Face repository
+  [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). The same repository, under the same
+  license, holds her Live2D model; the script puts it into `avatar/models/Amika/` (`--skip-avatar` leaves it out).
+  Every download is pinned by size and SHA-256; a re-run verifies and skips what is already there.
+- `settings.example.json` lists it under `services.tts`, so the launcher starts it on port 8002 with the rest and
+  waits for `GET /ping` (models plus four warm-up lines, about 20 s on a GPU). `tts_url` points at it and
+  `tts_character` (`MekaHime_Amika`) names the voice.
+- It needs about 2.5 GB of VRAM; `--cpu` installs a CPU build for machines without an NVIDIA GPU (slower).
+- Flags, the request contract in full, how it uses upstream and measurements: `vendor/tts-engine/README.md`.
+
+**One voice ships:** `MekaHime_Amika`, an old-vocabulary voice (the 67 V1 ids plus `happy4` and `sad4`, 69 clips).
+Any other voice is yours to bring: a speaker folder in `vendor/tts-engine/Speakers/` (`character.json`, the
+`.ckpt` / `.pth` weights, `references/emotions.json`), or any other server that speaks the contract above: point
+`tts_url` at it and describe it under `services.tts` (command, cwd, health URL) so the launcher starts it with
+the rest.
 
 ## Emotion vocabularies: internal vs. old-style voices
 
@@ -45,7 +64,7 @@ The launcher can start your server with everything else: describe it under `serv
   contract the brain's templates, both streaming parsers and the Live2D banks are built on; it never
   changes regardless of which voice speaks.
 - **Old-style voice ids (V1)**: 67 flat ids with intensity numbers (`happy2`, `tsun3`, `whisper1`, …),
-  the vocabulary of MekaHime's older GPT-SoVITS voices.
+  the vocabulary of MekaHime's GPT-SoVITS voices, Amika's included.
 
 ## The voice adapter (default: ON)
 
@@ -61,8 +80,8 @@ default** (defaults in code; `config/voice_map.json` is written when you change 
   stale or hand-edited file degrades safely to the defaults;
 - Setup → Voice gives you the per-cell grid (changed cells highlight), enable/disable, and reset.
 
-**Your own server:** if it understands the 69 internal keys directly (or ignores tags), switch the adapter
-off on Setup → Voice and set `tts_character` in `settings.json` to your voice id (that value is used whenever
-the adapter is off). If it uses flat ids like `happy2`, keep the adapter on, set its voice on Setup → Voice
-(the adapter sends its own voice id, default `Amika2`) and tune the grid by ear; remapping is a voice-acting
-decision per voice.
+**Your own voice or server:** if it understands the 69 internal keys directly (or ignores tags), switch the
+adapter off on Setup → Voice and set `tts_character` in `settings.json` to your voice id (that value is used
+whenever the adapter is off). If it uses flat ids like `happy2`, keep the adapter on, set its voice on Setup →
+Voice (the adapter sends its own voice id, default `MekaHime_Amika`) and tune the grid by ear; remapping is a
+voice-acting decision per voice.

@@ -595,7 +595,7 @@ def configured_services(cfg):
             continue
         cmd = list(spec['command'])
         cmd[0] = str(resolve(cmd[0])) if ('/' in cmd[0] or '\\' in cmd[0]) and not Path(cmd[0]).is_absolute() else cmd[0]
-        env = {k: (str(resolve(v)) if isinstance(v, str) and v.startswith(('IoT', 'Hermes', 'Nanomuse', 'Vanadis', 'logs', 'servers')) else str(v))
+        env = {k: (str(resolve(v)) if isinstance(v, str) and v.startswith(('IoT', 'Hermes', 'Nanomuse', 'vendor', 'logs', 'servers')) else str(v))
                for k, v in (spec.get('env') or {}).items()}
         out.append(Service(name, cmd, cwd=resolve(spec.get('cwd') or '.'), env=env, health=spec.get('health'),
                            port=spec.get('port'), timeout=int(spec.get('timeout_s', 60)), after=spec.get('after'),

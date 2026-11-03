@@ -7,7 +7,7 @@
   "local_model_url": "http://127.0.0.1:11434/v1/chat/completions",
   "speech_device": "cuda:0",
   "tts_url": "http://127.0.0.1:8002",
-  "tts_character": "Amika2",
+  "tts_character": "MekaHime_Amika",
   "embedder": {
     "python": "envs\\embed\\python.exe",
     "port": 8011,
@@ -32,17 +32,19 @@
   "services": {
     "_readme": "Optional. Programs the launcher starts in its one console (and stops with Ctrl+C). Paths relative to this folder. health = URL answering when up, or port = TCP port opening when up; after = start once that service is up. A service already running is used as is.",
     "tts": {
-      "enabled": false,
-      "_readme": "Your TTS server (any server speaking docs/TTS.md). Example only: point command/cwd at your own install.",
+      "enabled": true,
+      "_readme": "The OpenAmika voice server (vendor/tts-engine, a MekaHime build of GPT-SoVITS) with Amika's voice. python scripts/setup_tts.py installs both; until then the launcher reports this command missing and she answers in text only. Keep --character in step with tts_character.",
       "command": [
-        "C:\\path\\to\\your-tts-server\\python.exe",
-        "server.py",
+        "vendor\\tts-engine\\.venv\\Scripts\\python.exe",
+        "main.py",
         "--port",
         "8002",
         "--host",
-        "127.0.0.1"
+        "127.0.0.1",
+        "--character",
+        "MekaHime_Amika"
       ],
-      "cwd": "C:\\path\\to\\your-tts-server",
+      "cwd": "vendor\\tts-engine",
       "health": "http://127.0.0.1:8002/ping",
       "timeout_s": 240
     },

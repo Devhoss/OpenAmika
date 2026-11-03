@@ -1,7 +1,9 @@
 # Live2D models
 
-No model ships with OpenAmika: Amika's own Live2D model is a MekaHime asset and is not distributed. Until
-you add one, the Use page shows an empty stage and everything else (voice, subtitles, memory) works.
+Amika's own Live2D model is a MekaHime asset under a personal-use license: `scripts/setup_tts.py` downloads
+it into `avatar/models/Amika/` from the Hugging Face repository `MekaHime/MekaHime_Amika` (with her voice,
+under the same license; it may not be redistributed). Without any model the Use page shows an empty stage
+and everything else (voice, subtitles, memory) works.
 
 **Getting a model.** Any Cubism 3/4/5 model works (a `.model3.json` + `.moc3` + textures):
 

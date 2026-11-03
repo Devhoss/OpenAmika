@@ -3,7 +3,7 @@
 The brain, the parsers and the Live2D banks all speak the 69-key
 `<register>_<emotion>` vocabulary (po_contract.VALID_EMOTIONS) — that contract never
 changes. The voices OpenAmika SHIPS, however, are the old-vocabulary (V1) ones
-(Amika2, Crescentine, SanRiYue1/2, miyo …), whose tag set is a flat 67 reference ids
+(MekaHime_Amika, Amika's voice from scripts/setup_tts.py), whose tag set is a flat 67 reference ids
 (`neutral1`, `happy2`, `tsun3` …). This adapter is therefore ON BY DEFAULT: it bridges
 the internal 69-key tags to the shipped V1 voice at the TTS boundary. Users who bring
 their own V2-native voice simply switch it off on the Setup page. Ported from the
@@ -22,9 +22,9 @@ stt_tts_v1_shim) with the same guarantees:
     use the Setup page) and the next sentence uses it; a broken file never throws.
 
 Config file: config/voice_map.json
-    {"enabled": true, "voice": "Amika2", "map": {"casual_happy": "happy2", ...}}
+    {"enabled": true, "voice": "MekaHime_Amika", "map": {"casual_happy": "happy2", ...}}
 `enabled: false` leaves requests untouched (bring-your-own V2-native voice). A missing
-file falls back to the shipped default: ENABLED, voice Amika2, built-in map.
+file falls back to the shipped default: ENABLED, voice MekaHime_Amika, built-in map.
 """
 from __future__ import annotations
 
@@ -84,8 +84,8 @@ V1_ID_SET = set(V1_IDS)
 
 # The V1 speakers OpenAmika ships for (suggestions for the UI dropdown; any non-empty
 # character_id is accepted — the gateway is the final validator).
-V1_VOICES = ["Amika2", "Crescentine", "SanRiYue1", "SanRiYue2", "miyo"]
-DEFAULT_VOICE = "Amika2"
+V1_VOICES = ["MekaHime_Amika"]
+DEFAULT_VOICE = "MekaHime_Amika"
 # Shipping policy: only V1 voices are distributed, so the adapter defaults to ON.
 DEFAULT_ENABLED = True
 
@@ -221,7 +221,7 @@ def save_state(enabled: bool, voice: str, partial_map: Optional[Dict[str, str]])
 
 
 def reset_state() -> None:
-    """Delete the map file → the shipped default: adapter ON, Amika2, built-in map."""
+    """Delete the map file → the shipped default: adapter ON, MekaHime_Amika, built-in map."""
     try:
         CONFIG_PATH.unlink()
     except FileNotFoundError:

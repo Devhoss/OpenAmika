@@ -2,7 +2,8 @@
 
 `speech/api.py` (FastAPI) is the part of OpenAmika your browser talks to. It runs the local speech recognition
 (**SenseVoiceSmall** with Silero VAD and barge-in), streams the brain's replies through the shared output parser,
-splits them into sentences, sends each sentence to your TTS server, and serves every web page. `launch.py` starts
+splits them into sentences, sends each sentence to her voice server (`vendor/tts-engine`, or any server that
+speaks `docs/TTS.md`), and serves every web page. `launch.py` starts
 it in the speech environment; it binds to 127.0.0.1.
 
 | file | what |
@@ -24,7 +25,7 @@ it in the speech environment; it binds to 127.0.0.1.
 | `YUMEHA_DEVICE` | `cuda:0` | STT device (`speech_device`); `cpu` works, slower |
 | `YUMEHA_MODEL` | `speech/models` | SenseVoiceSmall folder |
 | `HANE_URL` | `http://127.0.0.1:5202` | the brain |
-| `AMIKA_TTS_URL` / `AMIKA_TTS_CHARACTER` | `http://127.0.0.1:8002` / `Amika2` | your TTS server and voice id |
+| `AMIKA_TTS_URL` / `AMIKA_TTS_CHARACTER` | `http://127.0.0.1:8002` / `MekaHime_Amika` | the voice server and voice id |
 | `AMIKA_VLM_URL` | empty (vision off) | the optional vision service |
 | `AMIKA_MESSENGERS_URL` | `http://127.0.0.1:5215` | the Discord/Telegram service |
 

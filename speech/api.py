@@ -236,6 +236,15 @@ async def ui_tools():
     return page
 
 
+@app.get("/about", response_class=HTMLResponse)
+async def ui_about():
+    """About MekaHime, supporting the project (the donate card) and the licenses."""
+    page = _ui_page("about.html")
+    if page is None:
+        raise HTTPException(status_code=404, detail="ui/about.html not found")
+    return page
+
+
 
 @app.get("/sfx_manifest")
 async def sfx_manifest():
@@ -1250,7 +1259,7 @@ class HaneClient:
 TTS_URL = os.getenv("AMIKA_TTS_URL", "http://127.0.0.1:8002")
 # Shipping policy: V1 (old-vocabulary) voices only — the voice adapter is on by default
 # and swaps character_id per request, so this value is the adapter-OFF fallback.
-TTS_CHARACTER_ID = os.getenv("AMIKA_TTS_CHARACTER", "Amika2")
+TTS_CHARACTER_ID = os.getenv("AMIKA_TTS_CHARACTER", "MekaHime_Amika")
 # 浏览器 Web Audio decodeAudioData 只能解**带容器**的音频（WAV/MP3/Ogg/WebM…），
 # 裸 Opus 帧解不了。本地局域网带宽充足，直接要 WAV 最省事。
 TTS_AUDIO_FORMAT = "wav"

@@ -21,7 +21,7 @@
     <div style="display:flex; gap:12px; margin-top:14px; align-items:center; flex-wrap:wrap;">
       <button class="btn small" id="healthRefresh">Re-check</button>
       <button class="btn small" id="meterReset" title="Start a fresh cost display period (the lifetime ledger is kept)">Reset cost meter</button>
-      <span class="card-hint">STT and the embedder run locally and are started by <code>launch.py</code>; the TTS server (Vanadis) runs separately — point <code>settings.json → tts_url</code> at it. Wiping her memory and resetting her live at the bottom of this page.</span>
+      <span class="card-hint">STT and the embedder run locally and are started by <code>launch.py</code>; her voice server (<code>vendor/tts-engine</code>, installed by <code>python scripts/setup_tts.py</code>) is started by the launcher from <code>settings.json → services.tts</code>, and <code>tts_url</code> points at it. Wiping her memory and resetting her live at the bottom of this page.</span>
     </div>
   </section>
 
@@ -97,8 +97,8 @@
     </p>
     <p class="card-hint" data-pro>
       Internally she always speaks the <b>69-key</b> <code>register_emotion</code> vocabulary — the prompts, parsers and
-      Live2D banks are built on it. The voices OpenAmika <b>ships are V1 (old-vocabulary)</b> voices
-      (<code>Amika2</code>, <code>Crescentine</code>, …) with their flat tag set (<code>happy2</code>, <code>tsun3</code>…),
+      Live2D banks are built on it. The voice OpenAmika <b>ships is a V1 (old-vocabulary)</b> voice
+      (<code>MekaHime_Amika</code>, her own) with its flat tag set (<code>happy2</code>, <code>tsun3</code>…),
       so the <b>voice adapter</b> below is <b>on by default</b>: it rewrites the leading emotion tag into the mapped V1 id and
       swaps the speaker — while her face keeps the original 69-key tag. Turn it off only if you bring your own
       V2-native voice. The 69→67 mapping is yours to tune per cell.
@@ -109,7 +109,7 @@
         Voice adapter (shipped default: on)
       </label>
       <div class="field" style="min-width:220px;"><label>V1 voice (character_id)</label>
-        <input type="text" id="vmapVoice" list="vmapVoices" placeholder="Amika2"><datalist id="vmapVoices"></datalist>
+        <input type="text" id="vmapVoice" list="vmapVoices" placeholder="MekaHime_Amika"><datalist id="vmapVoices"></datalist>
       </div>
       <button class="btn small" id="vmapSave">Save voice settings</button>
       <button class="editorial-link" id="vmapReset" data-pro>Reset map to defaults →</button>

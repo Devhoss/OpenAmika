@@ -38,7 +38,7 @@
       $("ttsUrlShow").textContent = p.url;
       $("ttsCharShow").textContent = p.character;
       $("ttsDot").className = "dot " + (p.ok ? "ok" : "err");
-      $("ttsDotNote").textContent = p.ok ? "reachable" : (p.error || "unreachable — start Vanadis (WebUI.py --port 8002)");
+      $("ttsDotNote").textContent = p.ok ? "reachable" : (p.error || "unreachable — install her voice (python scripts/setup_tts.py), then start OpenAmika");
       setNavDot(2, p.ok ? "ok" : "err");
     } catch (_) { add("err", "TTS", "probe failed"); setNavDot(2, "err"); }
     // avatar + tools
@@ -377,7 +377,7 @@
   $("vmapSave").addEventListener("click", saveVoiceMap);
   $("vmapReset").addEventListener("click", async () => {
     await fetch("/api/voice_map/reset", { method: "POST" }).catch(() => {});
-    toast("Voice map reset to the shipped default (adapter ON, Amika2, built-in map).");
+    toast("Voice map reset to the shipped default (adapter ON, MekaHime_Amika, built-in map).");
     loadVoiceMap();
   });
 

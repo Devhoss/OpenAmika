@@ -5,6 +5,43 @@
   nav("use"); footer();
 
   const $ = (id) => document.getElementById(id);
+
+  // ── Support MekaHime popup (the same mechanics as OpenSakura's): the first ask comes 2 minutes after the page has
+  // loaded, then every 30 minutes while the page is visible. Never in kiosk mode (?kiosk=1, for clean captures) and
+  // never again after "never show this again" (stored per browser). Her first-run wizard is never covered: while it
+  // is open the first ask waits and tries again every 30 s.
+  const DONATE_FIRST_MS = 2 * 60 * 1000;
+  const DONATE_EVERY_MS = 30 * 60 * 1000;
+  const KIOSK = new URLSearchParams(location.search).has("kiosk");
+  const donateModal = $("donate-modal");
+  function donateNever() {
+    try { return localStorage.getItem("openamika.donateNever") === "1"; } catch (_) { return false; }
+  }
+  function showDonate(why) {
+    if (KIOSK || donateNever() || !donateModal || !donateModal.hidden) return;
+    if (document.querySelector(".oa-wizard-backdrop")) {
+      if (why === "first") setTimeout(() => showDonate(why), 30 * 1000);
+      return;
+    }
+    donateModal.hidden = false;
+    donateModal.dataset.why = why;
+    $("donate-later").focus();
+  }
+  function hideDonate() { if (donateModal) donateModal.hidden = true; }
+  if (donateModal) {
+    $("donate-close").addEventListener("click", hideDonate);
+    $("donate-later").addEventListener("click", hideDonate);
+    $("donate-never").addEventListener("click", () => {
+      try { localStorage.setItem("openamika.donateNever", "1"); } catch (_) { /* private mode */ }
+      hideDonate();
+      toast("okay — we won't ask again");
+    });
+    donateModal.addEventListener("click", (e) => { if (e.target === donateModal) hideDonate(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !donateModal.hidden) hideDonate(); });
+    const armDonate = () => setTimeout(() => showDonate("first"), DONATE_FIRST_MS);
+    if (document.readyState === "complete") armDonate(); else window.addEventListener("load", armDonate, { once: true });
+    setInterval(() => { if (!document.hidden) showDonate("interval"); }, DONATE_EVERY_MS);
+  }
   const TARGET_SR = 16000;
 
   // ── avatar ──

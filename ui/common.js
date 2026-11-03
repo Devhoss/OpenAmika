@@ -41,6 +41,7 @@
         <a href="/setup" data-page="setup">Setup</a>
         <a href="/tools" data-page="tools">Tools</a>
         <a href="/use" data-page="use">Use</a>
+        <a href="/about" data-page="about">About</a>
       </div>
       <div style="display:flex;align-items:center;">
         <div class="oa-mode" title="Simple hides the expert controls; Professional shows everything">
@@ -70,6 +71,7 @@
         <a href="/tools">Tools</a>
         <a href="/use">Use</a>
         <a href="/flow">System flow</a>
+        <a href="/about">About &amp; support</a>
         <a href="https://github.com/zeekk0/OpenAmika" rel="noopener" target="_blank">GitHub</a>
       </div>
       <p class="fine">OpenAmika · an open companion · locally yours</p>`;

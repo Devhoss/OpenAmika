@@ -261,13 +261,13 @@
         "An untagged quote is never spoken before its closing mark arrives, so a thought cannot leak into speech.",
         "The first deep sentence is held back until it can be compared with what the surface already said (no repeats).",
         "Unknown or missing tags fall back to casual_neutral; 【SFX】 names outside the nine known sounds are dropped silently." ] }] },
-    { id: "adapter", title: "Voice adapter", sub: "69 keys → V1 voice ids · Amika2", icon: "♫", layer: "gateway", group: "speech/api.py",
+    { id: "adapter", title: "Voice adapter", sub: "69 keys → V1 voice ids · MekaHime_Amika", icon: "♫", layer: "gateway", group: "speech/api.py",
       source: "speech/api.py voice adapter · GET/POST /api/voice_map · Setup → Voice (Professional)",
-      summary: "The shipped voices are V1 voices (Amika2, Crescentine…) with their own flat emotion ids. The adapter rewrites the leading tag of each sentence into the mapped V1 id and swaps the speaker, while her face keeps the original tag.",
+      summary: "The shipped voice is a V1 voice (MekaHime_Amika) with its own flat emotion ids. The adapter rewrites the leading tag of each sentence into the mapped V1 id and swaps the speaker, while her face keeps the original tag.",
       sections: [{ title: "Config", items: [
         "On by default; the 69 → 67 map is editable per cell on the Setup page.",
         "Turn it off only with a V2-native voice that understands the full vocabulary.",
-        "settings.json tts_character (Amika2) is the adapter-off default speaker." ] }] },
+        "settings.json tts_character (MekaHime_Amika) is the adapter-off default speaker." ] }] },
     { id: "ttsclient", title: "TTS client", sub: "Socket.IO · one request per sentence", icon: "♪", layer: "gateway", group: "speech/api.py",
       source: "speech/api.py TTSClient · emit tts_request_gateway → on audio_ready · probe GET /ping",
       summary: "Each sentence becomes one request to the TTS server; the audio that comes back is wrapped with its emotion tag and pause into one `tts_audio` message for the browser. Sentences go out one at a time, each waiting for the previous `audio_ready` or `error`.",
@@ -381,8 +381,8 @@
         "Started third by the launcher, after the brain; optional." ] }] },
 
     // ── services started by the launcher ──
-    { id: "tts", title: "TTS server", sub: "Vanadis Evo (GPT-SoVITS) · voice Amika2", icon: "♬", layer: "service", group: "service", port: 8002, external: true,
-      source: "settings.json services.tts → Vanadis_Evo/WebUI.py --port 8002 · settings.json tts_url, tts_character",
+    { id: "tts", title: "TTS server", sub: "OpenAmika voice server (GPT-SoVITS) · voice MekaHime_Amika", icon: "♬", layer: "service", group: "service", port: 8002, external: true,
+      source: "settings.json services.tts → vendor/tts-engine/main.py --port 8002 · settings.json tts_url, tts_character",
       summary: "Her voice. A separate Socket.IO server: the gateway emits tts_request_gateway {task_id, turn_id, text, character_id} and receives one audio_ready per request with the audio bytes, format and duration.",
       sections: [{ title: "Details", items: [
         "Started by the launcher if nothing answers GET /ping on port 8002 (timeout 240 s); a copy already running is used as is.",
@@ -466,7 +466,7 @@
     ["brain", "dialog", "begin · end · call_receipt · timeline", "data", "Turn lifecycle for the browser (`ai_begin`, `ai_surface_done`, `ai_deep_done`, `ai_end`) plus per-call receipts and the latency timeline."],
     ["dialog", "brain", "protect · commit · speech_done", "control", "`protect` the moment her voice starts (the turn becomes durable), `speech_done` when the last chunk has played; `commit` marks the turn id.", "bottom"],
     ["split", "adapter", "[emotion]\"sentence\" · 【SFX】", "data", "One sentence at a time with its tag; sound effects validated; pronunciation replacements applied."],
-    ["adapter", "ttsclient", "V1 id + speaker", "data", "The leading tag is rewritten into the mapped V1 voice id (Amika2); her face keeps the original key."],
+    ["adapter", "ttsclient", "V1 id + speaker", "data", "The leading tag is rewritten into the mapped V1 voice id (MekaHime_Amika); her face keeps the original key."],
     ["ttsclient", "tts", "tts_request_gateway → audio_ready", "audio", "Socket.IO on port 8002, one request per sentence, each waiting for the previous answer; 5 s without an answer skips the sentence."],
     ["ttsclient", "stage", "tts_audio {audio_b64, emotion, pause_after}", "audio", "One message per sentence: audio, its emotion, the pause after it, its kind (surface / deep). The stage plays it with lipsync and fires the expression at playback start."],
     ["stage", "dialog", "tts_playing / tts_finished · flush on speech_start", "control", "Acknowledgements per chunk anchor barge-in and feed the latency timeline; `speech_start` from the gateway flushes local playback when you interrupt."],

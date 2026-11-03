@@ -178,6 +178,23 @@
 
 <div class="viz-tip" id="vizTip"></div>
 
+<!-- Support MekaHime: the first ask comes 2 minutes after the page has loaded, then every 30 minutes while the page is
+     visible; never with ?kiosk=1 and never again after "never show this again" (the donate block in use.js) -->
+<div id="donate-modal" hidden role="dialog" aria-modal="true" aria-label="Support MekaHime">
+  <div class="modal">
+    <button type="button" class="modal-close" id="donate-close" title="close" aria-label="Close">×</button>
+    <img class="modal-logo" src="/ui/assets/mekahime-logo.webp" alt="MekaHime">
+    <p>We believe AI waifu is for everyone. They should not be locked behind a paywall.</p>
+    <p class="muted">Amika is 100% open sourced so you can run her locally with controls to all of your private information. But this means we aren't earning a single dollar, so please consider donating to keep this project alive.</p>
+    <a class="donate-giant" href="https://www.mekahime.com/donate" target="_blank" rel="noopener">♥ Support MekaHime</a>
+    <div class="modal-actions">
+      <button type="button" class="btn small" id="donate-later">Maybe later</button>
+      <button type="button" class="link" id="donate-never">never show this again</button>
+    </div>
+  </div>
+</div>
+
+
 <script src="/ui/vendor/live2dcubismcore.min.js"></script>
 <script src="/ui/vendor/pixi-legacy.min.js"></script>
 <script src="/ui/vendor/cubism4.min.js"></script>
