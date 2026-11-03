@@ -1,0 +1,7 @@
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.png binary
+*.webp binary
+*.jpg binary
+*.min.js -diff

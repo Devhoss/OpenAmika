@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14091a">
+<title>OpenAmika · Tools</title>
+<link rel="stylesheet" href="/ui/openamika.css">
+</head>
+<body>
+<main class="oa-main">
+  <div class="oa-page-head rv" style="--d:0">
+    <h1>Her <em>hands</em></h1>
+    <p class="sub">Give her agents and tools — Hermes Agent, nanoMuse, smart-home control, anything that speaks MCP.
+    Enable one and she knows she has it. She decides whether to use it; nothing runs until you asked and she agreed.</p>
+  </div>
+
+  <div class="oa-eyebrow rv" style="--d:1"><span>How she uses them</span><i>道具</i></div>
+  <section class="tech-card rv" style="--d:2">
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
+      <label style="display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:16px;">
+        <span class="switch"><input type="checkbox" id="toolsEnabled"><span class="track"></span></span>
+        Tools enabled
+      </label>
+      <span class="card-hint">She speaks first, as always. After she has answered, a small metered clerk call reads what you asked and what she
+      said out loud, and hands over only what she agreed to — quoting your own words as proof. She can refuse. She can't start anything on her own.</span>
+    </div>
+    <div class="form-row" data-pro>
+      <div class="field" style="max-width:200px;"><label>Clerk runs on</label>
+        <select id="clerkRole">
+          <option value="surface">surface model (cheap, default)</option>
+          <option value="deep">deep model</option>
+          <option value="reflection">reflection model</option>
+          <option value="memory_write">memory writer model</option>
+        </select>
+      </div>
+      <div class="field"><label>Max calls / turn</label><input type="number" id="limCalls" min="1" max="10" step="1"></div>
+      <div class="field"><label>Call timeout (s)</label><input type="number" id="limTimeout" min="3" max="120" step="1"></div>
+      <div class="field"><label>Job poll (s)</label><input type="number" id="limPoll" min="1" max="30" step="0.5"></div>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:14px; align-items:center; flex-wrap:wrap;">
+      <button class="btn primary" id="toolsSave">Save tool settings</button>
+      <span class="card-hint">Agents report back through her: progress, questions, approval requests, the final result. An agent's approval
+      is released only by your yes in conversation or a click on the Use page — never by her.</span>
+    </div>
+  </section>
+
+  <!-- smart home: the iot server card (rendered by tools.js into #iotServer) and the plugs by hand, for everyone -->
+  <div class="oa-eyebrow rv" style="--d:3"><span>Smart Home and IoT</span><i>家</i></div>
+  <section class="tech-card rv" style="--d:4" id="iotCard">
+    <h3><span class="dot" id="iotDot"></span> Smart Home and IoT <span class="tool-sub" id="iotSub">checking…</span></h3>
+    <div id="iotServer"></div>
+    <div class="card-hint" id="iotHint" hidden></div>
+    <div class="iot-grid" id="iotDevices"></div>
+    <div class="iot-pairing">
+      <button class="btn small" id="iotPairBtn" type="button">Find new devices</button>
+      <button class="btn small danger" id="iotPairStop" type="button" hidden>Stop</button>
+      <span class="card-hint" id="iotPairNote">Put a new plug into pairing mode, then press Find.</span>
+    </div>
+    <div class="iot-events mono" id="iotEvents"></div>
+  </section>
+
+  <div class="oa-eyebrow rv" style="--d:7"><span>Agents &amp; MCP servers</span><i>接続</i></div>
+  <div id="serversBox" class="rv" style="--d:8"></div>
+
+  <section class="tech-card rv" style="--d:9" data-pro>
+    <h3>Add a server</h3>
+    <div class="form-row">
+      <div class="field" style="max-width:160px;"><label>Name</label><input type="text" id="addName" placeholder="hermes" maxlength="32"></div>
+      <div class="field" style="max-width:150px;"><label>Transport</label>
+        <select id="addTransport"><option value="stdio">stdio (local)</option><option value="http">http (remote)</option></select></div>
+      <div class="field" style="flex:2;"><label id="addTargetLabel">Command + args (first word = command)</label>
+        <input type="text" id="addTarget" class="mono" placeholder="python -m openamika_agents hermes"></div>
+      <button class="btn small" id="addBtn">Add</button>
+    </div>
+    <p class="card-hint" style="margin-top:10px;">
+      Recipes — <b>Hermes Agent</b>: <code>python -m openamika_agents hermes</code> (needs <code>hermes gateway</code> with its API server on; put
+      <code>HERMES_API_KEY</code> in the entry's env, see <code>servers/openamika-agents/README.md</code>) ·
+      <b>nanoMuse</b>: <code>python -m openamika_agents nanomuse</code> (needs <code>nanomuse serve</code>; <code>NANOMUSE_TOKEN_FILE</code> in env) ·
+      <b>Smart home</b>: <code>python -m openamika_iot</code> (cwd <code>../servers/openamika-iot</code>) ·
+      <b>Home Assistant</b>: http → <code>http://homeassistant.local:8123/mcp_server/sse</code> + bearer header · any other MCP server works the same way.
+    </p>
+    <details class="oa-details" data-pro>
+      <summary>Raw config (tools.json)</summary>
+      <div class="inner">
+        <textarea id="rawConfig" class="mono" rows="14" spellcheck="false"></textarea>
+        <div style="display:flex; gap:12px; margin-top:10px;">
+          <button class="btn small" id="rawSave">Save raw config</button>
+          <span class="card-hint">Full document — env vars, headers, cwd live here.</span>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <div class="oa-eyebrow rv" style="--d:10" data-pro><span>Call log</span><i>記録</i></div>
+  <section class="tech-card rv" style="--d:11" data-pro>
+    <div class="table-scroll">
+      <table class="oa-table"><thead><tr>
+        <th>When</th><th>Tool</th><th>Arguments</th><th>Outcome</th><th>Result</th>
+      </tr></thead><tbody id="logBody"><tr><td colspan="5" class="card-hint">No tool calls yet.</td></tr></tbody></table>
+    </div>
+  </section>
+</main>
+
+<script src="/ui/common.js"></script>
+<script src="/ui/tools.js"></script>
+</body>
+</html>

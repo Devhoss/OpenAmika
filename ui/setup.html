@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14091a">
+<title>OpenAmika · Setup</title>
+<link rel="stylesheet" href="/ui/openamika.css">
+</head>
+<body>
+<main class="oa-main">
+  <div class="oa-page-head rv" style="--d:0">
+    <h1>Set <em>her</em> up</h1>
+    <p class="sub">Connect the pieces — speech, voice, brain, body — and shape who she is.</p>
+  </div>
+
+  <!-- health -->
+  <div class="oa-eyebrow rv" style="--d:1"><span>System health</span><i>状態</i></div>
+  <section class="tech-card rv" style="--d:2">
+    <div id="healthRows"><div class="card-hint">Checking…</div></div>
+    <div style="display:flex; gap:12px; margin-top:14px; align-items:center; flex-wrap:wrap;">
+      <button class="btn small" id="healthRefresh">Re-check</button>
+      <button class="btn small" id="meterReset" title="Start a fresh cost display period (the lifetime ledger is kept)">Reset cost meter</button>
+      <span class="card-hint">STT and the embedder run locally and are started by <code>launch.py</code>; the TTS server (Vanadis) runs separately — point <code>settings.json → tts_url</code> at it. Wiping her memory and resetting her live at the bottom of this page.</span>
+    </div>
+  </section>
+
+  <!-- models -->
+  <div class="oa-eyebrow rv" style="--d:3"><span>Brain · OpenRouter models</span><i>頭脳</i></div>
+  <section class="tech-card rv" style="--d:4">
+    <p class="card-hint" style="margin-bottom:6px">
+      She thinks through four AI roles: <b>surface</b> answers instantly, <b>deep</b> is her real voice,
+      <b>reflection</b> coaches between turns, <b>memory writer</b> remembers. All of them run on your OpenRouter key.
+    </p>
+    <div class="model-summary" id="modelSummary"><span class="card-hint">Loading current models…</span></div>
+    <div class="prov-switch" id="provSwitch" style="margin:12px 0;">
+      <button type="button" class="prov" id="provOpenrouter" data-prov="openrouter"><b>OpenRouter</b><span>cloud · her tested models · needs a key</span></button>
+      <button type="button" class="prov" id="provOllama" data-prov="ollama"><b>Ollama</b><span>fully local · your own GPU · no key, no cost</span></button>
+    </div>
+    <div id="orPanel">
+      <div class="form-row" style="margin-bottom:6px;">
+        <div class="field" style="flex:2"><label>OpenRouter API key</label>
+          <input type="password" id="orKeyInput" placeholder="sk-or-v1-…" autocomplete="off"></div>
+        <button class="btn small primary" id="orKeySave">Save key</button>
+        <span class="card-hint" id="orKeyStatus">checking…</span>
+      </div>
+      <p class="card-hint" data-simple>Get a key at openrouter.ai → Keys. That's the only account OpenAmika needs.</p>
+      <p class="card-hint" id="orBackNote" hidden>She is on Ollama right now. <button class="editorial-link" id="orBack">Switch back to the OpenRouter preset →</button></p>
+    </div>
+    <div id="ollamaPanel" hidden>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="field" style="flex:2"><label>Ollama server</label>
+          <input type="text" id="olUrl" placeholder="http://127.0.0.1:11434" autocomplete="off"></div>
+        <button class="btn small" id="olDetect">Detect models</button>
+        <span class="card-hint" id="olStatus">checking…</span>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="field" style="flex:2"><label>Model for all four roles</label><select id="olModel"></select></div>
+        <button class="btn small primary" id="olUse">Use this model</button>
+        <span class="card-hint" id="olNote"></span>
+      </div>
+      <p class="card-hint">
+        Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a>, then
+        <code>ollama pull qwen3:14b</code> (any chat model works). One model for all four roles keeps the GPU from
+        swapping models. Thinking is off for speed except in the reflection role; the context window is set to 16k so
+        her prompts fit. <b>Memory:</b> the model needs free GPU memory next to her speech, voice and vision services
+        (a 7B model wants about 5 GB; a 14B about 10 GB) — if Ollama says it cannot fit, pick a smaller model, turn
+        vision off in <code>settings.json</code>, or point the address at a second PC running Ollama. Her memory search
+        already runs locally — with Ollama, nothing leaves your computer. In <b>Professional</b> mode you can mix:
+        a local model for some roles, OpenRouter for others.
+      </p>
+    </div>
+    <div data-pro>
+      <div class="form-row" style="margin:14px 0;">
+        <div class="field" style="flex:2"><label>Preset</label><select id="presetSelect"></select></div>
+        <button class="btn small" id="presetApply">Apply preset</button>
+      </div>
+      <div class="role-grid" id="roleGrid"></div>
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <button class="btn primary" id="modelsSave">Save model choices</button>
+        <span class="card-hint" id="modelsNote"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- voice -->
+  <div class="oa-eyebrow rv" style="--d:5"><span>Voice · TTS &amp; adapter</span><i>声</i></div>
+  <section class="tech-card rv" style="--d:6">
+    <div class="oa-grid cols-3" style="margin-bottom:14px;">
+      <div class="field"><label>TTS server</label><div id="ttsUrlShow" class="mono" style="padding:9px 2px; color:var(--muted);">—</div></div>
+      <div class="field" data-pro><label>Adapter-off character (settings.json)</label><div id="ttsCharShow" class="mono" style="padding:9px 2px; color:var(--muted);">—</div></div>
+      <div class="field"><label>Reachability</label><div style="display:flex;align-items:center;gap:8px;padding:9px 2px;"><span class="dot" id="ttsDot"></span><span class="card-hint" id="ttsDotNote">probing…</span></div></div>
+    </div>
+    <p class="card-hint" data-simple>
+      Her voice comes from the TTS server above; the light says whether it answers. Changing the voice or the
+      voice adapter lives in <b>Professional</b> mode.
+    </p>
+    <p class="card-hint" data-pro>
+      Internally she always speaks the <b>69-key</b> <code>register_emotion</code> vocabulary — the prompts, parsers and
+      Live2D banks are built on it. The voices OpenAmika <b>ships are V1 (old-vocabulary)</b> voices
+      (<code>Amika2</code>, <code>Crescentine</code>, …) with their flat tag set (<code>happy2</code>, <code>tsun3</code>…),
+      so the <b>voice adapter</b> below is <b>on by default</b>: it rewrites the leading emotion tag into the mapped V1 id and
+      swaps the speaker — while her face keeps the original 69-key tag. Turn it off only if you bring your own
+      V2-native voice. The 69→67 mapping is yours to tune per cell.
+    </p>
+    <div style="display:flex; align-items:center; gap:14px; margin:14px 0; flex-wrap:wrap;" data-pro>
+      <label style="display:inline-flex;align-items:center;gap:10px;font-weight:600;">
+        <span class="switch"><input type="checkbox" id="vmapEnabled"><span class="track"></span></span>
+        Voice adapter (shipped default: on)
+      </label>
+      <div class="field" style="min-width:220px;"><label>V1 voice (character_id)</label>
+        <input type="text" id="vmapVoice" list="vmapVoices" placeholder="Amika2"><datalist id="vmapVoices"></datalist>
+      </div>
+      <button class="btn small" id="vmapSave">Save voice settings</button>
+      <button class="editorial-link" id="vmapReset" data-pro>Reset map to defaults →</button>
+    </div>
+    <details class="oa-details" id="vmapDetails" data-pro>
+      <summary>Emotion map — 69 new keys → 67 old ids</summary>
+      <div class="inner"><div class="vmap-grid" id="vmapGrid"><div class="card-hint">Loading…</div></div></div>
+    </details>
+  </section>
+
+  <!-- vision -->
+  <div class="oa-eyebrow rv" style="--d:7"><span>Vision · she can see</span><i>視界</i></div>
+  <section class="tech-card rv" style="--d:7">
+    <div id="visionRows"><div class="card-hint">Checking…</div></div>
+    <p class="card-hint" data-simple style="margin-top:10px;">
+      Press the camera button on the <a href="/use">Use page</a> stage and she'll see what your camera sees —
+      it flows into her replies naturally ("you're holding a mug?").
+    </p>
+    <div data-pro style="margin-top:10px;">
+      <p class="card-hint">
+        A small local VLM (<code>vision/vlm_service.py</code>) subscribes to the gateway's
+        <code>/ws/vlm_feed</code>, describes frames continuously (gated by a scene-change diff), and the
+        gateway suffixes each of your turns with <code>（你在视频中看到：…）</code> while the description is
+        fresh (&le;3 s). Her own latest line is fed back as prompt context, language-matched.
+        Configure in <code>settings.json → vision</code>: <code>qwen3-vl-2b</code> (~4.3 GB VRAM, zh/en/ja — default) ·
+        <code>qwen3-vl-4b</code> (~9 GB, sharper) · <code>qwen2.5-vl-3b</code> · <code>smolvlm2-2.2b</code> /
+        <code>-500m</code> (EN, tiny). Model changes apply on relaunch.
+      </p>
+    </div>
+  </section>
+
+  <!-- avatar -->
+  <div class="oa-eyebrow rv" style="--d:8"><span>Body · Live2D</span><i>姿</i></div>
+  <section class="tech-card rv" style="--d:8">
+    <div data-simple>
+      <p class="card-hint" id="avSimpleList" style="margin-bottom:6px;">Checking installed models…</p>
+      <p class="card-hint">Pick which model is on stage from the dropdown on the <a href="/use">Use page</a>.
+      Importing new models and motion/expression mapping live in <b>Professional</b> mode.</p>
+    </div>
+    <div data-pro>
+      <p class="card-hint" style="margin-bottom:12px">
+        Drop a Cubism model folder into <code>avatar/models/&lt;name&gt;/</code> (one <code>.model3.json</code> per folder),
+        then Rescan. Motions named after emotion keys — <code>casual_happy.motion3.json</code>, <code>casual_happy.2.motion3.json</code> —
+        are picked automatically; the banks JSON below overrides that per key, with likelihood rolls like the original engine.
+      </p>
+      <div class="form-row" style="margin-bottom:12px;">
+        <div class="field" style="flex:1"><label>Model</label><select id="avModelSelect"></select></div>
+        <button class="btn small" id="avReload">Rescan folder</button>
+      </div>
+      <div class="oa-grid cols-4" style="margin-bottom:12px;">
+        <div class="field"><label>Display name</label><input type="text" id="avDisplayName"></div>
+        <div class="field"><label>Mouth-open param</label><input type="text" id="avMouthOpen" placeholder="ParamMouthOpenY"></div>
+        <div class="field"><label>Mouth-form param</label><input type="text" id="avMouthForm" placeholder="ParamMouthForm"></div>
+        <div class="field"><label>Stage scale (0.05–3)</label><input type="number" id="avScale" step="0.05" min="0.05" max="3" placeholder="0.85"></div>
+      </div>
+      <div class="field"><label>Emotion banks (JSON · <code>{"banks": {"casual_happy": {"emotes": [...], "movements": [...]}}}</code>)</label>
+        <textarea id="avBanks" class="mono" rows="12" spellcheck="false"></textarea>
+      </div>
+      <div style="display:flex; gap:12px; margin-top:12px; align-items:center;">
+        <button class="btn primary" id="avSave">Save avatar config</button>
+        <span class="card-hint" id="avNote"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- you & amika -->
+  <div class="oa-eyebrow rv" style="--d:9"><span>You &amp; Amika</span><i>二人</i></div>
+  <section class="tech-card rv" style="--d:9">
+    <p class="card-hint" style="margin-bottom:12px">
+      Who she lives with, and where. Her prompts say your name wherever <code>{user_name}</code> appears and your
+      city wherever <code>{city}</code> does. The time zone is <b>her clock</b>: the time of day in her scenes, the
+      weekday, and the dates she remembers things by. The first-run wizard on the Use page fills these in too.
+    </p>
+    <div class="oa-grid cols-4" style="margin-bottom:12px;">
+      <div class="field"><label>What should Amika call you?</label><input type="text" id="pUser" maxlength="40" placeholder="your name" autocomplete="off"></div>
+      <div class="field"><label>Time zone (her clock)</label><select id="pTimezone"></select></div>
+      <div class="field"><label>Your city</label><input type="text" id="pCity" maxlength="80" placeholder="e.g. Los Angeles" autocomplete="off"></div>
+      <div class="field"><label>Amika's name</label><input type="text" id="pName" maxlength="40" placeholder="Amika" autocomplete="off"></div>
+    </div>
+    <div class="form-row" style="margin-bottom:12px;">
+      <div class="field" style="flex:2"><label>How her voice says your name (pronunciation guide, e.g. Amika → Ameeka; empty = as written)</label>
+        <input type="text" id="pSayAs" maxlength="80" placeholder="spell it the way it sounds" autocomplete="off"></div>
+      <button class="btn small" id="pHear">🔊 Hear her say it</button>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <button class="btn primary" id="pIdentitySave">Save</button>
+      <span class="card-hint mono" id="pClock"></span>
+      <span class="card-hint" id="pIdentityNote"></span>
+    </div>
+  </section>
+
+  <!-- personality -->
+  <div class="oa-eyebrow rv" style="--d:9"><span>Personality</span><i>性格</i></div>
+  <section class="tech-card rv" style="--d:10">
+    <p class="card-hint" style="margin-bottom:12px">
+      Fill in the blanks — her story, her days, your relationship. Write <code>{user_name}</code> wherever she
+      should say your name and <code>{city}</code> for your city; <code>{weekday}</code> fills in automatically.
+      Each time of day has five possibilities, <b>[1]</b> to <b>[5]</b>: every day she lives one of them (20% each).
+      Everything saves straight into her prompts, and the format rules are machine-checked so you can't break her.
+    </p>
+    <div id="personaBuilder"><p class="card-hint">Loading her story…</p></div>
+    <div style="display:flex; gap:12px; margin:14px 0 4px; align-items:center;">
+      <button class="btn primary" id="pbSave">Save personality</button>
+      <span class="card-hint" id="pbNote"></span>
+    </div>
+    <div data-pro style="border-top:1px solid var(--line); margin-top:18px; padding-top:14px;">
+    <p class="card-hint" style="margin-bottom:10px">
+      Raw files — <b>surface</b> (表层 — instant 4-line triage), <b>deep</b> (例子 — her real reply, emotions and
+      inner thoughts), <b>reflection</b> (思考 — the background coach), and <b>scenes.json</b>. FORMAT blocks are
+      contract-checked on save.
+    </p>
+    <div class="form-row" style="margin-bottom:8px; align-items:center;">
+      <div class="field" style="max-width:260px;"><label>File</label>
+        <select id="pTarget">
+          <option value="scenes">scenes.json — daily life &amp; persona</option>
+          <option value="deep">例子.txt — deep template</option>
+          <option value="surface">表层.txt — surface template</option>
+          <option value="thinking">思考.txt — reflection template</option>
+        </select>
+      </div>
+      <span class="tag" id="pCheckTag" hidden></span>
+    </div>
+    <div class="field">
+      <textarea id="pEditor" class="mono" rows="20" spellcheck="false"></textarea>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:12px; align-items:center; flex-wrap:wrap;">
+      <button class="btn primary" id="pSave">Save &amp; hot-reload</button>
+      <button class="editorial-link" id="pRevert">Discard my edits →</button>
+      <span class="card-hint" id="pNote"></span>
+    </div>
+    </div>
+  </section>
+
+  <!-- text her: Discord / Telegram bots -->
+  <div class="oa-eyebrow rv" style="--d:10"><span>Text her · Discord &amp; Telegram</span><i>便り</i></div>
+  <section class="tech-card rv" style="--d:10">
+    <p class="card-hint" style="margin-bottom:12px">
+      Text her from your phone — words only, no voice. Make a bot, paste its token, put <b>your own user id</b> on
+      the allow list, and she answers that bot's DMs (in a Discord server: when @mentioned). Anyone not on the list
+      is told their id so you can add them. Tokens stay in <code>config/messengers.json</code> on this computer.
+      Her quick line and her real reply arrive as two messages; when she speaks first, it goes to the chat you last used.
+    </p>
+    <div id="msgRows"><div class="card-hint">Checking…</div></div>
+    <div class="oa-grid cols-2" style="margin-top:16px;">
+      <div>
+        <h3>Discord</h3>
+        <p class="card-hint" style="margin:6px 0 10px;">
+          <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Developer Portal</a> →
+          New Application → Bot → <i>Reset Token</i>. Invite it with the <code>bot</code> scope (no permissions needed
+          for DMs; <i>Send Messages</i> to use it in a server). Your id: Discord Settings → Advanced → Developer Mode,
+          then right-click your name → <i>Copy User ID</i>.
+        </p>
+        <div class="field"><label>Bot token <span class="mono" id="msgDiscordHint"></span></label>
+          <input type="password" id="msgDiscordToken" autocomplete="off" placeholder="paste a token · blank keeps the saved one"></div>
+        <div class="field"><label>Allowed Discord user ids (comma-separated)</label>
+          <input type="text" id="msgDiscordUsers" placeholder="e.g. 123456789012345678"></div>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap;">
+          <label style="display:inline-flex;align-items:center;gap:10px;font-weight:600;">
+            <span class="switch"><input type="checkbox" id="msgDiscordOn"><span class="track"></span></span> Enabled
+          </label>
+          <button class="editorial-link" id="msgDiscordClear">Forget the token →</button>
+        </div>
+      </div>
+      <div>
+        <h3>Telegram</h3>
+        <p class="card-hint" style="margin:6px 0 10px;">
+          Message <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> → <code>/newbot</code> →
+          copy the token. Then send your bot <code>/id</code>: it answers with your user id — put it on the list below.
+        </p>
+        <div class="field"><label>Bot token <span class="mono" id="msgTelegramHint"></span></label>
+          <input type="password" id="msgTelegramToken" autocomplete="off" placeholder="paste a token · blank keeps the saved one"></div>
+        <div class="field"><label>Allowed Telegram user ids (comma-separated)</label>
+          <input type="text" id="msgTelegramUsers" placeholder="e.g. 123456789"></div>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap;">
+          <label style="display:inline-flex;align-items:center;gap:10px;font-weight:600;">
+            <span class="switch"><input type="checkbox" id="msgTelegramOn"><span class="track"></span></span> Enabled
+          </label>
+          <button class="editorial-link" id="msgTelegramClear">Forget the token →</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:16px; align-items:center; flex-wrap:wrap;">
+      <button class="btn primary" id="msgSave">Save &amp; connect</button>
+      <span class="card-hint" id="msgNote"></span>
+    </div>
+  </section>
+
+  <!-- danger zone: wipe memory / reset everything -->
+  <div class="oa-eyebrow rv" style="--d:11"><span>Danger zone</span><i>危</i></div>
+  <section class="tech-card rv" style="--d:11">
+    <div class="oa-grid cols-2">
+      <div>
+        <h3>Wipe her memory</h3>
+        <p class="card-hint" style="margin:6px 0 10px;">
+          She forgets every remembered conversation and fact, and the transcript is cleared. Her personality, your
+          names and every setting stay. A local backup is kept under <code>memory_f/backups/</code>.
+          She has to be idle: power off the stage first. Type <b>WIPE</b> to arm.
+        </p>
+        <div class="form-row">
+          <div class="field"><label>Confirmation</label><input type="text" id="wipeConfirm" placeholder="WIPE" autocomplete="off"></div>
+          <button class="btn small danger" id="wipeBtn">Wipe memory</button>
+        </div>
+      </div>
+      <div>
+        <h3>Reset everything</h3>
+        <p class="card-hint" style="margin:6px 0 10px;">
+          Starts her over from the shipped defaults: memory wiped (backup kept), the personality files restored,
+          your name, city and clock cleared — the first-run wizard plays again on the Use page. API keys, bot tokens,
+          voice and avatar settings are kept. Type <b>RESET</b> to arm.
+        </p>
+        <div class="form-row">
+          <div class="field"><label>Confirmation</label><input type="text" id="resetConfirm" placeholder="RESET" autocomplete="off"></div>
+          <button class="btn small danger" id="resetBtn">Reset everything</button>
+        </div>
+      </div>
+    </div>
+    <p class="card-hint" id="dangerNote" style="margin:12px 0 0;"></p>
+  </section>
+
+  <!-- links -->
+  <div class="oa-eyebrow rv" style="--d:11"><span>Reference</span><i>図</i></div>
+  <div class="oa-grid cols-3 rv" style="--d:12">
+    <a class="tech-card" href="/flow" style="display:block;color:inherit;">
+      <h3>System flow →</h3><p class="card-hint">Interactive architecture map of the whole pipeline — every socket, port and phase.</p>
+    </a>
+  </div>
+</main>
+
+<script src="/ui/common.js"></script>
+<script src="/ui/setup.js"></script>
+</body>
+</html>

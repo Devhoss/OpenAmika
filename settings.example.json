@@ -1,0 +1,75 @@
+{
+  "_readme": "Copy to settings.json (git-ignored). Interpreter paths may be relative to this folder: the README creates the environments with `conda create -p envs\\<name>`, which gives envs\\brain\\python.exe and so on; absolute paths to any other environments work too. brain = Python 3.11 + brain/requirements.txt; speech = Python 3.11 + CUDA torch + speech/requirements.txt (also runs the Discord/Telegram service); embedder = its own env with CUDA torch + brain/requirements-embedder.txt (BAAI/bge-m3 downloads into the Hugging Face cache on its first start, about 2.3 GB). The optional vision block gives her eyes: a small local VLM (vision/requirements.txt) that describes your camera feed; leave enabled:false to run without it.",
+  "brain_python": "envs\\brain\\python.exe",
+  "speech_python": "envs\\speech\\python.exe",
+  "brain_port": 5202,
+  "chat_port": 53000,
+  "local_model_url": "http://127.0.0.1:11434/v1/chat/completions",
+  "speech_device": "cuda:0",
+  "tts_url": "http://127.0.0.1:8002",
+  "tts_character": "Amika2",
+  "embedder": {
+    "python": "envs\\embed\\python.exe",
+    "port": 8011,
+    "model": "BAAI/bge-m3",
+    "tag": "bge-m3-d768",
+    "dims": 768,
+    "dtype": "fp16",
+    "device": "cuda",
+    "load_timeout_s": 600
+  },
+  "vision": {
+    "enabled": false,
+    "_models": "qwen3-vl-2b (~4.3 GB VRAM, zh/en/ja, default) | qwen3-vl-4b (~9 GB, sharper but slow on some stacks) | qwen2.5-vl-3b (~7.6 GB) | smolvlm2-2.2b (~5 GB, EN) | smolvlm2-500m (~1.2 GB, tiny EN)",
+    "python": "envs\\vision\\python.exe",
+    "port": 8014,
+    "model": "qwen3-vl-2b",
+    "max_tokens": 60,
+    "max_dps": 1.0,
+    "device": "cuda",
+    "load_timeout_s": 900
+  },
+  "services": {
+    "_readme": "Optional. Programs the launcher starts in its one console (and stops with Ctrl+C). Paths relative to this folder. health = URL answering when up, or port = TCP port opening when up; after = start once that service is up. A service already running is used as is.",
+    "tts": {
+      "enabled": false,
+      "_readme": "Your TTS server (any server speaking docs/TTS.md). Example only: point command/cwd at your own install.",
+      "command": [
+        "C:\\path\\to\\your-tts-server\\python.exe",
+        "server.py",
+        "--port",
+        "8002",
+        "--host",
+        "127.0.0.1"
+      ],
+      "cwd": "C:\\path\\to\\your-tts-server",
+      "health": "http://127.0.0.1:8002/ping",
+      "timeout_s": 240
+    },
+    "mqtt": {
+      "enabled": false,
+      "command": [
+        "C:\\Program Files\\mosquitto\\mosquitto.exe",
+        "-c",
+        "mosquitto.conf"
+      ],
+      "cwd": "IoT",
+      "port": 1883,
+      "timeout_s": 15
+    },
+    "zigbee2mqtt": {
+      "enabled": false,
+      "command": [
+        "node",
+        "index.js"
+      ],
+      "cwd": "IoT\\zigbee2mqtt",
+      "env": {
+        "ZIGBEE2MQTT_DATA": "IoT\\data"
+      },
+      "health": "http://127.0.0.1:8080/",
+      "timeout_s": 90,
+      "after": "mqtt"
+    }
+  }
+}

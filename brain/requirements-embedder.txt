@@ -1,0 +1,8 @@
+# Environment for brain/embed_server.py (local BAAI/bge-m3 embeddings for her memory, port 8011).
+# Install a CUDA build of torch first (see README), then:  pip install -r brain/requirements-embedder.txt
+# The weights download into the Hugging Face cache on the first start (~2.3 GB for BAAI/bge-m3).
+# Tested with: torch 2.11 (cu128), sentence-transformers 5.3, transformers 5.5, huggingface_hub 1.9.
+torch>=2.1
+sentence-transformers>=3.0,<6
+transformers>=4.40,<6
+huggingface_hub>=0.23,<2

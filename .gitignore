@@ -1,0 +1,65 @@
+# ── Secrets: never commit ────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+brain/.env*
+settings.json
+config/tools.json
+config/messengers.json
+
+# ── Private runtime data (memories, usage ledger, logs, machine-local state) ──
+memory_f/
+brain/memories/
+logs/
+*.log
+*.sqlite
+*.sqlite-journal
+config/seed.json
+config/ollama.json
+config/voice_map.json
+servers/openamika-iot/devices.json
+servers/openamika-iot/scenes.json
+avatar/stage/
+tests/output/
+controls_verification.json
+
+# ── Environments created by the README (conda create -p envs\<name>) ──
+envs/
+
+# ── Large model weights and licensed assets (bring your own / download) ──
+speech/models/*
+!speech/models/DOWNLOAD.md
+avatar/models/*
+!avatar/models/README.md
+
+# ── Third-party stacks you install next to OpenAmika (never part of this repo) ──
+IoT/zigbee2mqtt/
+IoT/data/
+IoT/logs/
+Hermes/
+Nanomuse/
+Vanadis_Evo/
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# ── OS / editor noise ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.bak
+*.tmp
+*.orig
+
+# ── Local TLS material ───────────────────────────────────────────────
+certs/
+*.pem
+*.key
