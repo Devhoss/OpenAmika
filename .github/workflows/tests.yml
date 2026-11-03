@@ -30,4 +30,9 @@ jobs:
       - name: Install the brain and test dependencies
         run: python -m pip install -r brain/requirements.txt -r requirements-dev.txt
       - name: Offline test suite
+        # The runner's default TEMP is an 8.3 short path (C:\Users\RUNNER~1\...); the memory store resolves its
+        # folder to the long name, so the tests that compare backup paths need a temp folder without short names.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: python -B -m pytest tests -k "not live" -p no:cacheprovider -q
