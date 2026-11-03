@@ -57,6 +57,14 @@ class LocalRolesTests(unittest.TestCase):
     def test_shipped_defaults_use_openrouter(self):
         self.assertFalse(launch.roles_all_local())
 
+    def test_missing_tools_json_is_not_a_problem(self):
+        self._with_roles({})
+        self.assertEqual(launch.load_tools(), (None, None))
+        (launch.ROOT / "config" / "tools.json").write_text("{not json", "utf-8")
+        tools, error = launch.load_tools()
+        self.assertIsNone(tools)
+        self.assertIn("not valid JSON", error)
+
 
 class ShippedSettingsTests(unittest.TestCase):
     def test_example_uses_relative_interpreters(self):

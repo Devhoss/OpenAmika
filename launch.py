@@ -580,7 +580,7 @@ def vision_settings(cfg):
 def load_tools():
     path = ROOT / 'config' / 'tools.json'
     if not path.is_file():
-        return None, 'config/tools.json not present (tool layer dormant)'
+        return None, None           # optional: no tools.json = tool layer off (the Tools page creates it)
     try:
         return json.loads(path.read_text('utf-8-sig')), None
     except ValueError as error:
@@ -793,7 +793,8 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
             else:
                 report.add('ok', f'tool {name}', 'configured (' + ('http' if scfg.get('url') else 'stdio') + ')')
     else:
-        report.add('ok', 'tools', 'tool layer disabled')
+        report.add('ok', 'tools', 'tool layer disabled' if tools is not None
+                   else 'tool layer off (no config/tools.json yet; the Tools page creates it)')
     if deep:
         for key, packages in (
             ('brain_python', ['flask', 'flask_cors', 'flask_socketio', 'requests', 'dotenv', 'google.genai']),
