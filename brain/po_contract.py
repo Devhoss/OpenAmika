@@ -675,7 +675,7 @@ EXCEPTION_CLAUSE = ("除非对方刚刚有特别的约定或要求（比如让�
 # Owner's rule (2026-10-24): her spoken language follows the person, whole turn, every turn. Two allowances:
 # an explicit request (switch / translate / repeat), and a one-or-two-phrase stylistic touch — telling him how
 # a line goes in Japanese, a quick 「ご主人様？」 — after which she returns to his language at once.
-STYLE_CLAUSE = ("点到为止的一两句外语可以有——告诉TA某句话用日语或中文怎么讲、顺口翻译一句、或者一句撒娇式的日语短句"
+STYLE_CLAUSE = ("点到为止的一两句外语可以有——告诉他某句话用日语或中文怎么讲、顺口翻译一句、或者一句撒娇式的日语短句"
                 "（「ご主人様？」这种）——说完立刻回到{name}。")
 # Proactive turns taught us this: the coach's cue and the bracketed reactions are written in Chinese for her
 # eyes; without this guard she answered the cue in Chinese mid-English-conversation (2026-10-24).

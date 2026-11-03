@@ -128,14 +128,14 @@ def test_capability_block_describes_servers_rules_and_jobs(wired):
     assert "iot：" in block and "get_state" in block
     assert "自作主张" in block and "别说\"已经做好了\"" in block
     assert "不许编造查到的内容" in block
-    assert "正在替TA办的事" not in block
+    assert "正在替他办的事" not in block
     f_tools._JOBS["hermes:j9"] = {"key": "hermes:j9", "server": "hermes", "job": "j9", "task": "找附近的中餐馆",
                                   "state": "waiting_question", "step": "", "cursor": 0, "relayed": set(),
                                   "pending": {"kind": "question", "id": "q1", "text": "你在哪个城市？"},
                                   "started": 0, "updated": 0}
     block = f_tools.capability_block()
-    assert "正在替TA办的事" in block and "找附近的中餐馆" in block and "等TA回答" in block
-    assert "问TA——你在哪个城市？" in block
+    assert "正在替他办的事" in block and "找附近的中餐馆" in block and "等他回答" in block
+    assert "问他——你在哪个城市？" in block
 
 
 def test_capability_block_is_none_when_disabled(wired):

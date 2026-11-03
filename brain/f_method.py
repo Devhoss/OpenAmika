@@ -345,7 +345,7 @@ class CandidateF(MemoryMethod):
                 head += ("；我说过：" if zh else "; I said: ") + sep.join(mine)
         elif mine:
             head = ((f"{when}，我自己说过：" if zh else f"{when}, I said myself: ") + sep.join(mine)
-                    + ("（这是我说的，不代表TA的事实）" if zh else " (my own words, not a fact about them)"))
+                    + ("（这是我说的，不代表他的事实）" if zh else " (my own words, not a fact about him)"))
         else:
             head = None
         if head is None:
@@ -399,7 +399,7 @@ class CandidateF(MemoryMethod):
             lines.append((f"{when}，{name}说：" if zh else f"{when}, {name} said: ")
                          + self._quoted(self._excerpt(heard, query, marker=marker)))
             if said:
-                lines.append(("我回TA：" if zh else "I replied: ")
+                lines.append(("我回他：" if zh else "I replied: ")
                              + self._quoted(self._excerpt(said, query, marker=marker)))
         elif said:
             lines.append((f"{when}，我说：" if zh else f"{when}, I said: ")

@@ -196,7 +196,7 @@
       const noteField = el("div", { class: "field", style: "margin-top:10px;", "data-pro": "" },   // Professional only
         el("label", { text: "What she knows about it (goes into her prompt when enabled; {user_name} = your name)" }));
       const area = el("textarea", { class: "mono", rows: "3", "data-note": name, spellcheck: "false",
-        placeholder: server.kind === "agent" ? "e.g. 赫尔墨斯——{user_name}装在TA电脑上的小帮手程序，能替你上网查东西、看TA的屏幕、读写邮件、网上下单……" : "e.g. 家里的灯和插座，可以开关、查状态" });
+        placeholder: server.kind === "agent" ? "e.g. 赫尔墨斯——{user_name}装在他电脑上的小帮手程序，能替你上网查东西、看他的屏幕、读写邮件、网上下单……" : "e.g. 家里的灯和插座，可以开关、查状态" });
       area.value = server.persona_note || "";
       noteField.append(area);
       card.append(noteField);

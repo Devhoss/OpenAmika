@@ -48,7 +48,7 @@ RAW_DATE_RE = re.compile(r"\b20\d\d-\d\d(?:-\d\d)?|\b\d\d:\d\d(?::\d\d)?\b")
 SUPERSEDED_MARK = "（这条后来被更正了，现在的说法见下）"
 HISTORICAL_MARK = "（当时的情况，现在可能已经变了）"
 UNRESOLVED_MARK = "（有一条可能是更正，还没确认）"
-ASSISTANT_MARK = "（这是我说的，不代表TA的事实）"
+ASSISTANT_MARK = "（这是我说的，不代表他的事实）"
 
 
 def _event(ident, time, user, assistant):
@@ -221,7 +221,7 @@ class MemoryRenderingTests(unittest.TestCase):
     def test_speaker_labels(self):
         text = self.new["text"]
         self.assertTrue("Alex说" in text, "user speaker label (user_name) missing")
-        self.assertTrue("我回TA" in text, "assistant speaker label 我 missing")
+        self.assertTrue("我回他" in text, "assistant speaker label 我 missing")
         other, missing = call_retrieve(build_new(), QUERY, BIG, now=NOW, user_name="Rin", lang="zh")
         if "user_name" not in missing:
             self.assertTrue("Rin说" in other["text"], "user name not taken from the caller/config")

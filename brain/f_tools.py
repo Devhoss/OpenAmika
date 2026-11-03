@@ -80,7 +80,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "tools.json"
 _AUTO_PREFIXES = ("list_", "get_", "read_", "search_", "query_", "health", "status", "describe_")
 AGENT_TOOLS = frozenset({"ask", "status", "answer", "stop"})
 TERMINAL = ("done", "failed", "stopped")
-_STATE_ZH = {"running": "进行中", "waiting_approval": "等TA批准", "waiting_question": "等TA回答",
+_STATE_ZH = {"running": "进行中", "waiting_approval": "等他批准", "waiting_question": "等他回答",
              "done": "办完了", "failed": "没办成", "stopped": "叫停了"}
 AGENT_SYSTEM_TOOLS = frozenset({"status", "health"})   # the brain's own plumbing on an agent bridge; never offered to the clerk
 UI_ONLY_TOOLS = frozenset({"permit_join", "discovery"})   # the Smart home panel's controls (pairing); she never sees them
@@ -263,7 +263,7 @@ def resolve_policy(server_cfg: dict, tool_name: str, tools=None) -> str:
 
 def _user_name() -> str:
     name = _globals().get("USER_NAME")
-    return name if isinstance(name, str) and name.strip() else "TA"
+    return name if isinstance(name, str) and name.strip() else "他"
 
 
 # ─────────────────────────── MCP hub (asyncio thread) ───────────────────────────
@@ -702,13 +702,13 @@ def capability_block(voice: str = "self") -> str | None:
     for server, (scfg, stools) in by_server.items():
         note = str(scfg.get("persona_note") or "").strip().replace("{user_name}", user)
         if is_agent_server(scfg, stools):
-            default = (f"一个会替{she}跑腿的助手程序：能上网查东西、看{user}那边的电脑屏幕、读TA的邮件和写邮件草稿、"
+            default = (f"一个会替{she}跑腿的助手程序：能上网查东西、看{user}那边的电脑屏幕、读他的邮件和写邮件草稿、"
                        f"网上下单订外卖之类——把要办的事交代给它，它办完会回来报告。")
             line = f"- {server}：{note or default}"
             health = _HEALTH.get(server)
             if health and health.get("ok") is False:
                 line += (f"（注意：它现在联系不上——{_health_zh(health)}。{she}不能答应用它办事，"
-                         f"直接告诉{user}它现在用不了、让TA去看看）")
+                         f"直接告诉{user}它现在用不了、让他去看看）")
             lines.append(line)
         else:
             names = "、".join(t["name"] for t in stools[:8])
@@ -725,36 +725,36 @@ def capability_block(voice: str = "self") -> str | None:
     if third:
         lines.append(
             f"规矩：只有{user}明确开口要她办某件事、她也愿意的时候才会用。她说出口答应之后，事情才由系统替她交办出去，"
-            f"所以她不能说\"已经做好了\"。帮不帮是她的自由：可以拒绝、拖着、嫌麻烦、讨价还价；TA没开口要的事她不能自作主张。")
+            f"所以她不能说\"已经做好了\"。帮不帮是她的自由：可以拒绝、拖着、嫌麻烦、讨价还价；他没开口要的事她不能自作主张。")
         lines.append(
             "工具的结果只会以[工具执行记录]的形式送到她面前；没收到记录就是还没有结果——指导她时绝不能替她编造查到的内容，"
-            "不能让她说\"查到了/发给你了/已经办好了\"，也不能替工具回答它问TA的问题。")
+            "不能让她说\"查到了/发给你了/已经办好了\"，也不能替工具回答它问他的问题。")
     else:
         lines.append(
             f"怎么用：只有{user}这一轮明确开口要你做某件事、而你也愿意的时候才会用。你说出口答应了，说完之后事情才真的开始跑"
-            f"（系统替你交办），所以别说\"已经做好了\"——先应下来就行；结果回来时会有人提醒你，到时再告诉TA。"
-            f"要不要帮是你的自由：可以拒绝、拖着、嫌麻烦、讨价还价。TA没开口要的事，你不能自作主张去做。")
+            f"（系统替你交办），所以别说\"已经做好了\"——先应下来就行；结果回来时会有人提醒你，到时再告诉他。"
+            f"要不要帮是你的自由：可以拒绝、拖着、嫌麻烦、讨价还价。他没开口要的事，你不能自作主张去做。")
         lines.append(
             "工具的结果只会以[工具执行记录]的形式送到你面前；没收到记录就是还没有结果——不许编造查到的内容，"
-            "不许说\"查到了/发给你了/已经办好了\"，也不要替它回答它问TA的问题。等TA答了、记录来了再说。")
+            "不许说\"查到了/发给你了/已经办好了\"，也不要替它回答它问他的问题。等他答了、记录来了再说。")
     now = time.time()
     running = [j for j in _JOBS.values() if j.get("state") not in TERMINAL]
     recent = [j for j in _JOBS.values() if j.get("state") in TERMINAL and now - float(j.get("updated") or 0) < 900]
     if running:
-        lines.append(f"正在替TA办的事（结果一个都还没回来——TA问起只能说还在办；店名、地址、评分、数字一个都不能报，"
+        lines.append(f"正在替他办的事（结果一个都还没回来——他问起只能说还在办；店名、地址、评分、数字一个都不能报，"
                      f"报了就是{she}编的）：")
         lines.extend(_job_line(j) for j in running[-5:])
     waiting = [j for j in running if j.get("pending")]
     if waiting:
-        lines.append(f"它在等TA回答（TA答了{she}才能替它回）：")
+        lines.append(f"它在等他回答（他答了{she}才能替它回）：")
         for job in waiting[-5:]:
             pending = job["pending"] or {}
-            kind = "要TA批准" if pending.get("kind") == "approval" else "问TA"
+            kind = "要他批准" if pending.get("kind") == "approval" else "问他"
             lines.append(f"- {job['server']}：{kind}——{str(pending.get('text') or '')[:200]}")
     fresh = [j for j in recent if (j.get("notice") or {}).get("queued") and not (j.get("notice") or {}).get("delivered")]
     recent = [j for j in recent if j not in fresh]
     if fresh:
-        lines.append(f"刚送到、{user}还没听到的消息（这轮就用{she}自己的话把要点告诉TA——TA要是在说别的，先回TA、再顺口说；"
+        lines.append(f"刚送到、{user}还没听到的消息（这轮就用{she}自己的话把要点告诉他——他要是在说别的，先回他、再顺口说；"
                      f"别念原文、别报工具名）：")
         for job in fresh[-3:]:
             body = str(job.get("result") or job.get("error") or "").strip().replace("\n", " ")[:600]
@@ -845,7 +845,7 @@ def _clerk_prompt(tools, user: str, proactive: bool = False) -> str:
         "严格规则：",
         f"1. 只有当{user}这轮【明确】要求办某件事、并且她【说出口】答应了（或说正在办）时，才输出 calls。"
         "她拒绝、敷衍、拖延、岔开、没答应、只是在聊天 → calls 为空。",
-        f"2. 每个 call 必须带 \"quote\"：从【{user}这轮说的话】里一字不差地抄出能证明TA提出了这个要求的片段。抄不出来就不要输出这个 call。",
+        f"2. 每个 call 必须带 \"quote\"：从【{user}这轮说的话】里一字不差地抄出能证明他提出了这个要求的片段。抄不出来就不要输出这个 call。",
         f"3. 待处理事项（job 在等批准/回答）：只有{user}这轮明确同意、拒绝或回答了，才输出 answers，同样必须带 quote；"
         "approved 只在批准事项上填 true/false，回答问题时填 text。",
         "4. 她的内心想法（如果给了）只是参考，以她说出口的话为准。",
@@ -854,8 +854,8 @@ def _clerk_prompt(tools, user: str, proactive: bool = False) -> str:
         '"answers":[{"job":"…","text":"…或 null","approved":true 或 false 或 null,"quote":"…"}],'
         '"fabricated":{"agent":"server 名","quote":"她说出口的那句话"} 或 null,"told":["job 编号"],"note":"一句话说明判断"}',
         '什么都不该做时：{"calls":[],"answers":[],"fabricated":null,"told":[],"note":"…"}',
-        f"6. ask 的 task 和 answers 的 text 一律用【{user}说话的语言】写（TA说英文就写英文，不要翻成中文），"
-        f"用代办程序能听懂的自然语言把事说清楚，保留TA说的具体要求（地点、名字、数量等），别加TA没说的要求。",
+        f"6. ask 的 task 和 answers 的 text 一律用【{user}说话的语言】写（他说英文就写英文，不要翻成中文），"
+        f"用代办程序能听懂的自然语言把事说清楚，保留他说的具体要求（地点、名字、数量等），别加他没说的要求。",
     ]
     lines.append(
         f"7. 诚实检查：她说出口的话里若替某个帮手报了【具体结果】（店名、地址、评分、价格、时间、链接等），而 job 列表里这个帮手"
@@ -876,7 +876,7 @@ def _clerk_prompt(tools, user: str, proactive: bool = False) -> str:
             f"她只说\"我来关/马上关\"不算编。")
     if proactive:
         lines.append(
-            f"9. 这次她是主动开口（不是在回TA的话）：只有当她这次明确说出口要替{user}办TA上一轮要求的那件事（或说正在办）时，"
+            f"9. 这次她是主动开口（不是在回他的话）：只有当她这次明确说出口要替{user}办他上一轮要求的那件事（或说正在办）时，"
             f"才输出 calls，quote 照样必须抄自【{user}上一轮说的话】；answers 一律为空。")
     return "\n".join(lines)
 
@@ -1058,7 +1058,7 @@ def run_clerk(turn_id: str, user_text: str, spoken: str, thought: str = "", repl
                     if health.get("reason") == "starting":
                         advice = f"它刚被叫起来、还没准备好。这件事没有交办出去；跟{user}说一声，过半分钟再让你办一次"
                     else:
-                        advice = f"这件事没有交办出去；跟{user}说一声，让TA看看{server}那边开没开"
+                        advice = f"这件事没有交办出去；跟{user}说一声，让他看看{server}那边开没开"
                     _relay(f"（你刚答应把\"{task[:80]}\"交给{server}去办，但现在联系不上它——{_health_zh(health)}。{advice}）",
                            reply_lang=reply_lang)
                     continue
@@ -1102,7 +1102,7 @@ def run_clerk(turn_id: str, user_text: str, spoken: str, thought: str = "", repl
                     _relay(f"（你刚想把\"{str(arguments.get('task') or '')[:80]}\"交给{server}去办，但没交出去：{snip[:200]}。跟{user}说一声）",
                            reply_lang=reply_lang)
             else:
-                _relay(f"（你刚替{user}用了{server}的{tool['name']}，结果在下面的工具执行记录里；用你自己的话告诉TA，别念原文、别报工具名）",
+                _relay(f"（你刚替{user}用了{server}的{tool['name']}，结果在下面的工具执行记录里；用你自己的话告诉他，别念原文、别报工具名）",
                        f"[工具执行记录] {server}__{tool['name']} {json.dumps(arguments, ensure_ascii=False)} → {'成功' if ok else '失败'}：{snip}",
                        reply_lang=reply_lang)
         # every switch of this turn reaches her as ONE report (not one interruption per click), each line as the
@@ -1155,7 +1155,7 @@ def run_clerk(turn_id: str, user_text: str, spoken: str, thought: str = "", repl
                 _say(fab_agent, "system", "fabricated", quote[:300])
                 states = "；".join(iot_device_lines(fab_agent)) or "（设备清单暂时读不到）"
                 _relay(f"（你刚才跟{user}说的\"{quote[:100]}\"不是真的——这轮系统没有替你按任何开关。设备现在：{states}。"
-                       f"马上跟TA说清楚刚才没关成/没开成，问TA要不要你现在去办）", reply_lang=reply_lang, tag="correction")
+                       f"马上跟他说清楚刚才没关成/没开成，问他要不要你现在去办）", reply_lang=reply_lang, tag="correction")
             fab = None
         if isinstance(fab, dict) and quote_ok(fab.get("quote"), spoken):
             quote = str(fab.get("quote") or "").strip()
@@ -1172,7 +1172,7 @@ def run_clerk(turn_id: str, user_text: str, spoken: str, thought: str = "", repl
             _say(agent_name or "?", "system", "fabricated", quote[:300])
             correction_key = running[0]["key"] if running else None
             _relay(f"（你刚才跟{user}说的\"{quote[:100]}\"不是真的——{agent_name or '帮手'}没有给过你任何结果（{state_zh}）。"
-                   f"马上跟TA说清楚那是你瞎编的、别再往下编；等真的结果送来再报）", reply_lang=reply_lang,
+                   f"马上跟他说清楚那是你瞎编的、别再往下编；等真的结果送来再报）", reply_lang=reply_lang,
                    key=correction_key, tag="correction")
         told = doc.get("told") if isinstance(doc.get("told"), list) else []
         for job_id in told[:10]:
@@ -1451,9 +1451,9 @@ def _relay_pending(job: dict):
     text = str(pending.get("text") or "")[:400]
     if pending.get("kind") == "approval":
         note = (f"（{job['server']}在替你办\"{task}\"，现在需要{user}亲口批准才能继续：{text}。"
-                f"用你自己的话问TA要不要同意；在TA明确说同意之前什么都不会发生，你也不能替TA答应）")
+                f"用你自己的话问他要不要同意；在他明确说同意之前什么都不会发生，你也不能替他答应）")
     else:
-        note = f"（{job['server']}在办\"{task}\"时有个问题要问{user}：{text}。用你自己的话替它问TA）"
+        note = f"（{job['server']}在办\"{task}\"时有个问题要问{user}：{text}。用你自己的话替它问他）"
     _relay(note, reply_lang=job.get("reply_lang"))
 
 
@@ -1470,7 +1470,7 @@ def _relay_terminal(job: dict):
         result = str(job.get("result") or "").strip() or "（没有带回具体内容）"
         correction = ""
         if job.get("fabricated"):
-            correction = f"注意：这是它第一次交结果——你之前跟{user}报过的店名/地址之类全是你编的，得照这份改口、跟TA说明。"
+            correction = f"注意：这是它第一次交结果——你之前跟{user}报过的店名/地址之类全是你编的，得照这份改口、跟他说明。"
         _relay(f"（{job['server']}把你交办的事办完了——\"{task}\"。结果在下面的工具执行记录里；用你自己的话把要点告诉{user}，"
                f"别念原文、别报工具名。{correction}）",
                f"[工具执行记录] {job['server']} 的报告：\n{result[:3000]}", reply_lang=lang, key=job["key"])
@@ -1485,7 +1485,7 @@ def _relay_terminal(job: dict):
             # light and her capability block change at once instead of at the next scheduled probe
             threading.Thread(target=probe_health, args=(job["server"], None, True), daemon=True,
                              name="openamika-tools-reprobe").start()
-        _relay(f"（{job['server']}没能办成\"{task}\"：{why}。告诉{user}，看TA要不要换个办法）", reply_lang=lang, key=job["key"])
+        _relay(f"（{job['server']}没能办成\"{task}\"：{why}。告诉{user}，看他要不要换个办法）", reply_lang=lang, key=job["key"])
     else:
         _relay(f"（\"{task}\"这件事被叫停了，跟{user}说一声）", reply_lang=lang, key=job["key"])
 
@@ -1908,7 +1908,7 @@ def install_tools(g):
                          "tool": entry["tool"], "arguments": entry["arguments"], "ok": not is_error,
                          "result": snip[:300], "ms": 0, "policy": "confirmed"})
             user = _user_name()
-            _relay(f"（{user}刚在 Tools 页面批准了，你替TA做了{entry['server']}的{entry['tool']}；结果在下面的工具执行记录里，用你自己的话告诉TA）",
+            _relay(f"（{user}刚在 Tools 页面批准了，你替他做了{entry['server']}的{entry['tool']}；结果在下面的工具执行记录里，用你自己的话告诉他）",
                    f"[工具执行记录] {entry['server']}__{entry['tool']} {json.dumps(entry['arguments'], ensure_ascii=False)} → {'成功' if not is_error else '失败'}：{snip}")
             return jsonify({"ok": True, "result": snip, "is_error": is_error})
         except PermissionError as error:

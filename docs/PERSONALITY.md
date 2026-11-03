@@ -90,9 +90,8 @@ third-person brief for the coach). Two things make it hers rather than generic:
   not next to her. The messengers service tags those turns with a `channel`, and the brain swaps the scene.
 - **Identity tokens.** `{user_name}` and `{city}` may appear anywhere in the templates and scenes; they are
   filled from `config/build_f.json` (Setup → *You & Amika*, or the first-run wizard on the Use page).
-  The persona texts never assume who you are: they call you `{user_name}`, or **TA** (the gender-neutral
-  written pronoun) where Chinese needs a pronoun. If you want her to think of you as 他 or 她, replace TA
-  in `scenes.json` and the three templates (and in `brain/defaults/`, which *Reset everything* restores).
+  The relationship and speaking-style blocks also carry her one running gag (what she says when she sees
+  you eating) — it is written in three places on purpose, so the surface, the deep and the coach all know it.
 
 ## Wipe, reset, first run
 

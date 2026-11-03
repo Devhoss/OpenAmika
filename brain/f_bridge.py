@@ -30,9 +30,9 @@ APP_NAME='OpenAmika'
 # to be repeated per record are stated once here: what I said back then proves
 # nothing about him, later corrections win, and anything not recorded is not
 # remembered. An empty cfg['memory_block_header'] switches it off.
-DEFAULT_MEMORY_HEADER=('【记忆记录】下面是我记得的、和TA以前的对话原话，以及从原话里记下的要点，前面写着大概是多久以前。'
-    '我以前说过的话只代表我当时怎么说，不能证明TA的事；说“后来被更正了”的，以更正后的说法为准。'
-    'TA问我是否还记得某件事、TA有没有说过某件事、或者当初为什么那样说时，先查这些记录再回答：'
+DEFAULT_MEMORY_HEADER=('【记忆记录】下面是我记得的、和他以前的对话原话，以及从原话里记下的要点，前面写着大概是多久以前。'
+    '我以前说过的话只代表我当时怎么说，不能证明他的事；说“后来被更正了”的，以更正后的说法为准。'
+    '他问我是否还记得某件事、他有没有说过某件事、或者当初为什么那样说时，先查这些记录再回答：'
     '记录里有的就照记录说；记录和对话里都没有的，就老实说不记得，不要猜、不要编。')
 # Recall-style follow-ups that should reach back to the last substantive user turn
 # (word-bounded English; Chinese and Japanese forms; 听说过 "have heard of" excluded).
