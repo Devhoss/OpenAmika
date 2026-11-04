@@ -628,8 +628,9 @@ resume, verify, repair, `--from-dir`, banks.json). Replay tests that need MekaHi
 themselves. GitHub Actions runs the same command on Windows with Python 3.11 (`.github/workflows/tests.yml`). The
 tests resolve their temp folders, so an 8.3 short `TEMP` (a long Windows user name) is fine. On an install in use the
 suite passes too: the tests that guard what ships (the neutral identity in `config/build_f.json`, the OpenRouter
-preset in `config/llm_roles.json`, her persona copies) read git's index (`tests/_shipped.py`), not the working-tree
-files that onboarding and the Setup page change. A failure there is never a reason to touch the person's files.
+preset in `config/llm_roles.json`, her persona copies) read git's index (`tests/_shipped.py`,
+`tests/test_shipped_copies.py`), not the working-tree files that onboarding and the Setup page change. A failure
+there is never a reason to touch the person's files.
 
 ## 11. Changing her safely
 
