@@ -34,8 +34,8 @@
     </p>
     <div class="model-summary" id="modelSummary"><span class="card-hint">Loading current models…</span></div>
     <div class="prov-switch" id="provSwitch" style="margin:12px 0;">
-      <button type="button" class="prov" id="provOpenrouter" data-prov="openrouter"><b>OpenRouter</b><span>cloud · her tested models · needs a key</span></button>
-      <button type="button" class="prov" id="provOllama" data-prov="ollama"><b>Ollama</b><span>fully local · your own GPU · no key, no cost</span></button>
+      <button type="button" class="prov" id="provOpenrouter" data-prov="openrouter"><b>OpenRouter</b><span>recommended · her tested models · a few dollars a month</span></button>
+      <button type="button" class="prov" id="provOllama" data-prov="ollama"><b>Ollama</b><span>fully local · a 27B+ model · a 32 GB GPU or a second PC</span></button>
     </div>
     <div id="orPanel">
       <div class="form-row" style="margin-bottom:6px;">
@@ -44,7 +44,7 @@
         <button class="btn small primary" id="orKeySave">Save key</button>
         <span class="card-hint" id="orKeyStatus">checking…</span>
       </div>
-      <p class="card-hint" data-simple>Get a key at openrouter.ai → Keys. That's the only account OpenAmika needs.</p>
+      <p class="card-hint" data-simple>Get a key at openrouter.ai → Keys. That's the only account OpenAmika needs, and in almost all cases the better choice: her tested models, for a few dollars a month.</p>
       <p class="card-hint" id="orBackNote" hidden>She is on Ollama right now. <button class="editorial-link" id="orBack">Switch back to the OpenRouter preset →</button></p>
     </div>
     <div id="ollamaPanel" hidden>
@@ -60,14 +60,21 @@
         <span class="card-hint" id="olNote"></span>
       </div>
       <p class="card-hint">
-        Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a>, then
-        <code>ollama pull qwen3:4b</code>, press <b>Detect models</b>, pick it and press <b>Use this model</b> (any
-        chat model works). <b>Memory:</b> the model needs free GPU memory next to her ears, memory and voice:
-        <code>qwen3:4b</code> fits next to her on a 12–16 GB card (on 16 GB with her eyes off:
-        <code>"vision": {"enabled": false}</code> in <code>settings.json</code>); bigger models need a second GPU, or
-        Ollama on another PC (put its address above). One model for all four roles keeps the GPU from swapping
-        models. Thinking is off for speed except in the reflection role; the context window is set to 16k so her
-        prompts fit. Her memory search already runs locally — with Ollama, nothing leaves your computer. In
+        <b>Use a model of 27B or more</b> — 70B or more gives the full, reliable experience. Smaller models may be
+        really bad: she loses her character, forgets what you told her and breaks her reply format. Install Ollama
+        from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a>, then
+        <code>ollama pull gemma3:27b</code> (17 GB) or <code>ollama pull qwen3:32b</code> (20 GB), press
+        <b>Detect models</b>, pick it and press <b>Use this model</b>.
+      </p>
+      <p class="card-hint">
+        <b>Memory:</b> next to the ~6 GB of her ears, memory and voice (~10 GB with her eyes), a 27B model needs about
+        19 GB of GPU memory, a 32B one about 24 GB and a 70B one 46–50 GB. One 32 GB card (RTX 5090) holds
+        <code>gemma3:27b</code> and all of her, <code>qwen3:32b</code> only with her eyes off
+        (<code>"vision": {"enabled": false}</code> in <code>settings.json</code>); a 70B model needs a 72–96 GB card.
+        With less, run Ollama on another PC (put its address above) — or stay on OpenRouter: in almost all cases it is
+        the better choice, for a few dollars a month. One model for all four roles keeps the GPU from swapping models.
+        Thinking is off for speed except in the reflection role; the context window is set to 16k so her prompts fit.
+        Her memory search already runs locally — with Ollama, nothing leaves your computer. In
         <b>Professional</b> mode you can mix: a local model for some roles, OpenRouter for others.
       </p>
     </div>

@@ -1196,7 +1196,7 @@ registerProcessor('pcm-pusher', PCMPusher);`;
       `Hello! I'm ${amika}. So nice to finally meet you in person — we've been talking for ages, and now I've actually moved into your place. Remind me of your name again?`,
       `${state.name}. Got it. So… which city are we in? I want to go out and explore.`,
       `${state.city}! I'm so excited to be here — new streets, new supermarkets, new everything. Okay. Let's get me set up so I can actually talk to you.`,
-      `First, my brain. I can think through OpenRouter — paste a key — or run entirely on your own computer with Ollama. Your call.`,
+      `First, my brain. I think best through OpenRouter — just paste a key, it only costs a few dollars a month. I can also run entirely on your own computer with Ollama, but only with a big model and a big graphics card.`,
       `Last one — let me check I can hear you and that you can hear me.`,
     ];
     const speakCurrent = () => speak(lines()[step], LINE_EMOTION[step]);
@@ -1310,8 +1310,8 @@ registerProcessor('pcm-pusher', PCMPusher);`;
         box.append(say(lines()[3]));
         // two ways to give her a brain: OpenRouter (cloud, a key) or Ollama (fully local, your GPU)
         const choice = el("div", { class: "prov-switch" });
-        const orBtn = el("button", { type: "button", class: "prov", "aria-pressed": "false" }, el("b", { text: "OpenRouter" }), el("span", { text: "cloud · her tested models · needs a key" }));
-        const olBtn = el("button", { type: "button", class: "prov", "aria-pressed": "false" }, el("b", { text: "Ollama" }), el("span", { text: "fully local · your own GPU · no key, no cost" }));
+        const orBtn = el("button", { type: "button", class: "prov", "aria-pressed": "false" }, el("b", { text: "OpenRouter" }), el("span", { text: "recommended · her tested models · a few dollars a month" }));
+        const olBtn = el("button", { type: "button", class: "prov", "aria-pressed": "false" }, el("b", { text: "Ollama" }), el("span", { text: "fully local · a 27B+ model · a 32 GB GPU or a second PC" }));
         choice.append(orBtn, olBtn);
         const orPanel = el("div", { class: "body" }), olPanel = el("div", { class: "body", hidden: "" });
         const pick = (which) => {
@@ -1335,13 +1335,13 @@ registerProcessor('pcm-pusher', PCMPusher);`;
           } catch (error) { toast(String(error.message || error), true); }
         }, "small primary");
         orPanel.append(el("div", { class: "form-row" }, el("div", { class: "field", style: "flex:2" }, el("label", { text: "OpenRouter API key" }), input), save), line,
-          el("p", { class: "hint", text: "Get a key at openrouter.ai → Keys; that's the only account she needs." }));
+          el("p", { class: "hint", text: "Get a key at openrouter.ai → Keys; that's the only account she needs. In almost all cases this is the better choice: her tested models, for a few dollars a month." }));
         loadKeyStatus(line);
         // Ollama panel
         const olUrl = el("input", { type: "text", placeholder: "http://127.0.0.1:11434", autocomplete: "off" });
         const olStatus = el("span", { class: "card-hint", text: "" });
         const olSelect = el("select", {});
-        const olNote = el("p", { class: "hint", text: "Install Ollama from ollama.com, pull a chat model (ollama pull qwen3:4b), press Detect models, pick it, press Use this model, and she runs entirely on this computer — her memory search already does. qwen3:4b fits next to her ears, memory and voice on a 12–16 GB card (on 16 GB with her eyes off); bigger models need a second GPU, or Ollama on another PC (put its address above)." });
+        const olNote = el("p", { class: "hint", text: "Use a model of 27B or more (70B or more for the full, reliable experience): smaller models may be really bad — she loses her character, forgets and breaks her replies. Install Ollama from ollama.com, run ollama pull gemma3:27b (17 GB), press Detect models, pick it, press Use this model, and she runs entirely on this computer — her memory search already does. A 27B model needs about 19 GB of GPU memory next to her own ~6 GB (~10 GB with her eyes): one 32 GB card holds it; with less, run Ollama on another PC (put its address above) or choose OpenRouter, in almost all cases the better choice." });
         const useBtn = button("Use this model", async () => {
           const model = olSelect.value;
           if (!model) { toast("Detect models first.", true); return; }
@@ -1370,7 +1370,7 @@ registerProcessor('pcm-pusher', PCMPusher);`;
           detect.disabled = true; olStatus.textContent = "asking Ollama…";
           try {
             const r = await postAction("/api/build_f/ollama/detect", "ollama-detect", { base_url: olUrl.value.trim() });
-            toast((r.models || []).length ? (r.models || []).length + " local model(s) found." : "Ollama answered, but has no models: ollama pull qwen3:4b", !(r.models || []).length);
+            toast((r.models || []).length ? (r.models || []).length + " local model(s) found." : "Ollama answered, but has no models: ollama pull gemma3:27b (or another model of 27B or more)", !(r.models || []).length);
             await loadOllamaPanel();
           } catch (error) { olStatus.textContent = String(error.message || error); toast(String(error.message || error), true); }
           finally { detect.disabled = false; }

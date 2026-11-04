@@ -174,8 +174,8 @@
     const onOllama = kinds.has("ollama"), onCloud = kinds.has("openrouter") || kinds.has("alibaba") || kinds.has("native");
     $("provOpenrouter").classList.toggle("active", onCloud);
     $("provOllama").classList.toggle("active", onOllama);
-    $("provOpenrouter").querySelector("span").textContent = onCloud && !onOllama ? "in use · cloud · her tested models" : "cloud · her tested models · needs a key";
-    $("provOllama").querySelector("span").textContent = onOllama && !onCloud ? "in use · fully local · your own GPU" : "fully local · your own GPU · no key, no cost";
+    $("provOpenrouter").querySelector("span").textContent = onCloud && !onOllama ? "in use · recommended · her tested models" : "recommended · her tested models · a few dollars a month";
+    $("provOllama").querySelector("span").textContent = onOllama && !onCloud ? "in use · fully local · a 27B+ model" : "fully local · a 27B+ model · a 32 GB GPU or a second PC";
     $("orBackNote").hidden = !onOllama;
     if (!provChosen) showProvider(onOllama && !onCloud ? "ollama" : "openrouter");
 
@@ -262,7 +262,7 @@
     $("olStatus").textContent = "asking Ollama…";
     try {
       const r = await postAction("/api/build_f/ollama/detect", "ollama-detect", { base_url: $("olUrl").value.trim() });
-      toast((r.models || []).length ? (r.models || []).length + " local model(s) detected — pick one and press Use this model." : "Ollama answered, but it has no models yet: ollama pull qwen3:4b", !(r.models || []).length);
+      toast((r.models || []).length ? (r.models || []).length + " local model(s) detected — pick one and press Use this model." : "Ollama answered, but it has no models yet: ollama pull gemma3:27b (or another model of 27B or more)", !(r.models || []).length);
       await loadOllama();
       loadModels();   // the role grid now offers the local models too
     } catch (error) { $("olStatus").textContent = String(error.message || error); toast(String(error.message || error), true); }

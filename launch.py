@@ -990,7 +990,8 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
     else:
         report.add('warn', 'API keys', 'no OpenRouter key yet — paste it in the first-run wizard on the Use page (or put '
                                        'it after OPENROUTER_API_KEY= in brain/.env); until then she cannot answer. '
-                                       'Fully local: switch the roles to Ollama on Setup → Brain')
+                                       'Fully local needs a model of 27B or more: switch the roles to Ollama on '
+                                       'Setup → Brain')
     for level, name, detail in ollama_checks():
         report.add(level, name, detail)
     level, detail = her_clock()

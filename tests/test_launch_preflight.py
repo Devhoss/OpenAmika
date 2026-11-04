@@ -187,7 +187,7 @@ def test_check_on_a_fresh_copy_prints_one_line_per_check_and_a_result(tmp_path):
 def test_her_roles_on_ollama_need_it_running_with_their_models_pulled(fresh, monkeypatch):
     monkeypatch.setattr(launch, "ROOT", fresh)
     (fresh / "config").mkdir()
-    picks = {role: f"{role}:ollama:qwen3:4b" for role in ("surface", "deep", "reflection")}
+    picks = {role: f"{role}:ollama:gemma3:27b" for role in ("surface", "deep", "reflection")}
     picks["memory_write"] = "memory_write:ollama:qwen3:8b"
     (fresh / "config" / "llm_roles.json").write_text(json.dumps({"selections": picks}), "utf-8")
     port = free_port()
@@ -201,10 +201,10 @@ def test_her_roles_on_ollama_need_it_running_with_their_models_pulled(fresh, mon
     got = run()
     assert got["API keys"][0] == "ok"                                     # no key needed ...
     assert got["Ollama"][0] == "err" and f"not answering at {base} — start Ollama" in got["Ollama"][1]   # ... but Ollama
-    with serve(port, {"/api/version": {"version": "0.12.6"}, "/api/tags": {"models": [{"name": "qwen3:4b"}]}}):
+    with serve(port, {"/api/version": {"version": "0.12.6"}, "/api/tags": {"models": [{"name": "gemma3:27b"}]}}):
         got = run()
     assert got["Ollama"] == ("ok", f"0.12.6 at {base}")
-    assert got["Ollama model qwen3:4b"] == ("ok", "pulled · surface, deep, reflection")
+    assert got["Ollama model gemma3:27b"] == ("ok", "pulled · surface, deep, reflection")
     assert got["Ollama model qwen3:8b"] == ("err", "not pulled — ollama pull qwen3:8b (memory_write runs on it)")
 
 
