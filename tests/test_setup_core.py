@@ -93,7 +93,7 @@ def test_brain_env_file_is_copied_and_a_missing_key_is_informational(checkout):
     assert (checkout / "brain" / ".env").read_text("utf-8") == (checkout / ".env.example").read_text("utf-8")
     mark, detail = rows()["brain/.env"]
     assert mark == "--" and "no OpenRouter key yet" in detail and "wizard" in detail
-    (checkout / "brain" / ".env").write_text("OPENROUTER_API_KEY=sk-or-v1-abcdefabcdef1234\n", "utf-8")
+    (checkout / "brain" / ".env").write_text("OPENROUTER_API_KEY=placeholder-for-the-test-1234\n", "utf-8")
     core.ROWS.clear()
     core.ensure_env_file(args)
     assert rows()["brain/.env"] == ("OK", "OpenRouter key set (...1234)")
