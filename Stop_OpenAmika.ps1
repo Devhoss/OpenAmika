@@ -6,6 +6,22 @@
 # Never by port or window title, so other python processes and other OpenAmika checkouts are untouched.
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $stopped = 0
+# taskkill /T lists the whole tree before it kills it. A venv's python.exe takes its interpreter along when it dies, so
+# some of those children are gone by their turn ("There is no running instance of the task"): that is not shown.
+# Any other refusal (for one, "Access is denied" for a process started from an administrator window) is.
+function Stop-Tree([int]$procId) {
+    # its SUCCESS lines (standard output) are dropped as before; its refusals come on standard error
+    $refusals = @(& taskkill /PID $procId /T /F 2>&1 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } |
+                  ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    for ($i = 0; $i -lt $refusals.Count; $i++) {
+        $text = $refusals[$i]
+        if ($i + 1 -lt $refusals.Count -and $refusals[$i + 1] -like 'Reason:*') {
+            $i++
+            $text = "$text $($refusals[$i])"
+        }
+        if ($text -notlike '*no running instance*') { Write-Host "  $text" }
+    }
+}
 $settings = $null
 try { $settings = Get-Content (Join-Path $root 'settings.json') -Raw | ConvertFrom-Json } catch {}
 $instance = Join-Path $root 'logs\instance.json'
@@ -16,7 +32,7 @@ if (Test-Path $instance) {
         $live = Get-CimInstance Win32_Process -Filter "ProcessId=$($record.launcher_pid)" -ErrorAction SilentlyContinue
         if ($live -and $live.Name -like 'python*' -and $live.CommandLine -and $live.CommandLine.ToLower().Contains('launch.py')) {
             Write-Host ("Stopping PID {0}: launcher" -f $record.launcher_pid)
-            & taskkill /PID $record.launcher_pid /T /F | Out-Null
+            Stop-Tree $record.launcher_pid
             $stopped++
         }
     }
@@ -29,7 +45,7 @@ if (Test-Path $instance) {
                  ($live.CommandLine -and $exe -and $live.CommandLine.ToLower().Contains($exe.ToLower()))
         if ($match) {
             Write-Host ("Stopping PID {0}: {1}" -f $entry.pid, $entry.name)
-            & taskkill /PID $entry.pid /T /F | Out-Null
+            Stop-Tree $entry.pid
             $stopped++
         }
     }
@@ -70,7 +86,7 @@ Get-CimInstance Win32_Process -Filter "Name LIKE 'python%'" | ForEach-Object {
     if ($hit) {
         Write-Host ("Stopping PID {0}: {1}" -f $_.ProcessId, $hit)
         if ($tree) {
-            & taskkill /PID $_.ProcessId /T /F | Out-Null
+            Stop-Tree $_.ProcessId
             $script:stopped++
         } else {
             try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; $script:stopped++ } catch {

@@ -1,13 +1,19 @@
-"""Launcher helpers: which launch.py a command line runs, local-only role detection, relative interpreter paths.
+"""Launcher helpers: which launch.py a command line runs, local-only role detection, relative interpreter paths, what
+ships in settings.example.json and config/, and when the page opens.
 
 Offline; imports launch.py without running it.
 """
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _shipped import shipped_bytes  # noqa: E402  (what ships, not what onboarding wrote: see tests/_shipped.py)
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("openamika_launch", ROOT / "launch.py")
@@ -55,6 +61,9 @@ class LocalRolesTests(unittest.TestCase):
         self.assertFalse(launch.roles_all_local())
 
     def test_shipped_defaults_use_openrouter(self):
+        shipped = json.loads(shipped_bytes("config/llm_roles.json").decode("utf-8-sig"))
+        self._with_roles(shipped.get("selections") or {})
+        self.assertTrue(shipped.get("selections"))
         self.assertFalse(launch.roles_all_local())
 
     def test_missing_tools_json_is_not_a_problem(self):
@@ -79,10 +88,31 @@ class ShippedSettingsTests(unittest.TestCase):
         self.assertEqual(len(set(ports)), len(ports))
 
     def test_shipped_identity_is_neutral(self):
-        cfg = json.loads((ROOT / "config" / "build_f.json").read_text("utf-8"))
+        cfg = json.loads(shipped_bytes("config/build_f.json").decode("utf-8-sig"))
         self.assertEqual(cfg["user_name"], "User")
         self.assertEqual(cfg["city"], "")
         self.assertFalse(cfg["onboarded"])
+
+
+class PageOpenerTests(unittest.TestCase):
+    """The browser opens once, when speech answers. A first start after the setup can take longer than speech's 90 s
+    start timeout (new environments spend a minute or more on their first imports): the page still opens then."""
+
+    def test_the_page_opens_once_when_speech_answers_even_after_its_timeout(self):
+        speech, opened = SimpleNamespace(state="timeout"), []
+        page = launch.PageOpener("http://localhost:53000", speech, opener=opened.append)
+        self.assertFalse(page.check())                       # yellow row: still starting, nothing to open yet
+        speech.state = "up"
+        self.assertTrue(page.check())
+        self.assertFalse(page.check())
+        self.assertEqual(opened, ["http://localhost:53000"])
+
+    def test_no_browser_never_opens_it(self):
+        opened = []
+        page = launch.PageOpener("http://localhost:53000", SimpleNamespace(state="up"), enabled=False,
+                                 opener=opened.append)
+        self.assertFalse(page.check())
+        self.assertEqual(opened, [])
 
 
 if __name__ == "__main__":

@@ -1210,6 +1210,23 @@ def plain_summary(state):
     return '\n'.join(lines)
 
 
+class PageOpener:
+    """Opens the web UI once, when the speech gateway answers: right after the start, or later, when a slow first start
+    (new environments spend a minute or more on their first imports) answers after its start timeout."""
+
+    def __init__(self, url, speech, enabled=True, opener=None):
+        self.url, self.speech, self.done = url, speech, not enabled
+        self.opener = opener or webbrowser.open
+
+    def check(self):
+        """Open the page now if speech is up and it was not opened yet; True when it did."""
+        if self.done or self.speech.state != 'up':
+            return False
+        self.done = True
+        self.opener(self.url)
+        return True
+
+
 # ── main ─────────────────────────────────────────────────────────────────────────────────
 def core_services(cfg, emb, vis):
     ports = [int(cfg['brain_port']), int(cfg['chat_port'])]
@@ -1373,9 +1390,8 @@ def main():
         report.resolve(everything)       # "will be started" items that did start are green now, here and on the Setup page
         report.save()
         write_instance(everything)
-        speech = next(s for s in cores if s.name == 'speech')
-        if speech.state == 'up' and not args.no_browser:
-            webbrowser.open(url)
+        page = PageOpener(url, next(s for s in cores if s.name == 'speech'), enabled=not args.no_browser)
+        page.check()
         state['phase'] = 'running'
         last_instance = time.monotonic()
         retried = set()
@@ -1386,6 +1402,8 @@ def main():
             time.sleep(0.5)
             before = [(s.name, s.state) for s in everything]
             tick()
+            if page.check():                 # speech answered after its start timeout (a first start): open it now
+                log(f'speech: up after its start timeout; opened {url}')
             # the IoT safety statement accepted on the Tools page while this runs: start the held smart-home services
             if iot_waiting and time.monotonic() - last_iot_check > 3:
                 last_iot_check = time.monotonic()

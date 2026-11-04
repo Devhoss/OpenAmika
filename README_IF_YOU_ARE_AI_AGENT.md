@@ -324,7 +324,9 @@ Done. Next:  .\Start_OpenAmika.bat   (or double-click it: her voice server start
 
 - Unattended (an agent's terminal has no console): ask the person to accept the terms first, then
   `envs\brain\Scripts\python.exe scripts\setup_tts.py --accept-voice-license`. Without a console and without that flag,
-  both rows read `!! … not downloaded: her license was not accepted (…)` and nothing of hers is downloaded.
+  both rows read `!! … not downloaded: her license was not accepted (…)` and nothing of hers is downloaded. (A
+  terminal whose input is the null device, as an agent's often is, counts as a console on Windows: the prompt is
+  printed, reads end-of-input at once and counts as no.)
 - While `MekaHime/MekaHime_Amika` is private: `$env:HF_TOKEN = "hf_..."` in the same PowerShell window first. Without
   it the rows read `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is
   not public yet. …`. A refusal or a network failure is also printed the moment it happens (`[setup] !! her voice: …`),
@@ -403,7 +405,10 @@ page and in the health light.
 problems, then one row per service (`Services`: tts; `Core`: embedder, brain, vision, speech, messengers). A spinner
 means starting or working; green `ready · pid … · <url>`; yellow `no answer after Ns — still running, see
 logs/<name>.log`; red `exited with code N — see logs/<name>.log`. A normal start: her voice ~20 s, the embedder
-10–60 s, the brain a few seconds, speech ~10–30 s; the browser opens when speech is up.
+10–60 s, the brain a few seconds, speech ~10–30 s; the browser opens when speech is up. The first start after the
+setup is slower: new environments spend a minute or more on their first imports (on fresh clones speech answered
+after 1 to 2 minutes, the longer one on a busy PC), so speech may read yellow `no answer after 90s — still running`
+first; it turns green and the browser opens when it answers (`launch.py --no-browser` never opens it).
 
 ### 5.6 Other setups
 
@@ -621,7 +626,10 @@ damaged packages), the SenseVoice downloader, and `setup_tts.py` against a local
 (`tests/test_setup_tts.py`: public, private with and without a token, the CDN and a mirror never seeing the token,
 resume, verify, repair, `--from-dir`, banks.json). Replay tests that need MekaHime's archived corpora skip
 themselves. GitHub Actions runs the same command on Windows with Python 3.11 (`.github/workflows/tests.yml`). The
-tests resolve their temp folders, so an 8.3 short `TEMP` (a long Windows user name) is fine.
+tests resolve their temp folders, so an 8.3 short `TEMP` (a long Windows user name) is fine. On an install in use the
+suite passes too: the tests that guard what ships (the neutral identity in `config/build_f.json`, the OpenRouter
+preset in `config/llm_roles.json`, her persona copies) read git's index (`tests/_shipped.py`), not the working-tree
+files that onboarding and the Setup page change. A failure there is never a reason to touch the person's files.
 
 ## 11. Changing her safely
 
