@@ -37,44 +37,46 @@ in your city. She runs on your own PC, with OpenRouter or fully local with Ollam
   eyes need 16 GB), with a recent driver
 - [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick **Add python.exe to PATH** when you
   install it) and [Git](https://git-scm.com/download/win)
-- About 40 GB of free disk. Setting her up downloads about 15–20 GB and takes 30–60 minutes
+- About 45 GB of free disk. Setting her up downloads about 15–20 GB and takes 30–60 minutes
 - An [OpenRouter](https://openrouter.ai) key (a few dollars of credit last a long time), or
   [Ollama](https://ollama.com) to run her brain on your PC too
 
 ## Set her up
 
-Open PowerShell in a folder that OneDrive does not sync (for example `C:\`) and run these lines one at a time:
+Open PowerShell (a normal window, not as administrator) and run these lines one at a time. They put her in
+`C:\OpenAmika`, a short folder that OneDrive does not sync:
 
 ```powershell
+cd C:\
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # her brain, ears, memory and eyes
 envs\brain\Scripts\python.exe scripts\setup_tts.py                   # her voice and Live2D model: type yes
-Start_OpenAmika.bat                                                  # start her
+.\Start_OpenAmika.bat                                                # start her
 ```
 
-Her voice and her Live2D model are free under MekaHime's personal-use license (see [Licenses](#licenses)); the
-second command shows it first and downloads them only after you type `yes`.
+Her voice and her Live2D model are free under MekaHime's personal-use license (see [Licenses](#licenses)): the
+`setup_tts.py` line shows it first and downloads her files only after you type `yes`.
 
-Both setup commands end with a summary: one line per part, `OK` when it is done, `!!` with the fix when it is not.
-Running a command again resumes and skips everything that is finished. These two lines mean she has her voice and
-her body:
-
-```
-  OK voice MekaHime_Amika  ...\Speakers\MekaHime_Amika (downloaded 75 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 75 files verified; 69/69 emotion tags with a clip; ...)
-  OK Live2D model Amika    ...\avatar\models\Amika (downloaded 174 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 174 files verified; AmikaV4.model3.json, 142 motions, 25 expressions)
-```
+Both setup commands end with a summary, one line per part: `OK` when it is done, `!!` with the fix when it is not,
+and `--` for information only (for example: no OpenRouter key yet, your first visit asks for it). Running a command
+again resumes and skips everything that is finished. When the `setup_tts.py` summary shows `OK voice MekaHime_Amika`
+and `OK Live2D model Amika`, she has her voice and her body.
 
 ## Talk to her
 
-`Start_OpenAmika.bat` opens one console that starts all of her, and your browser opens **http://localhost:53000**
-when she is ready: about a minute, a few more the very first time. On your first visit she introduces herself and
-asks your name, your city and, if `brain\.env` has none yet, your OpenRouter key. Then press the power button and
-talk, or type. Click the page once so the browser lets her speak.
+Double-click `Start_OpenAmika.bat` in the OpenAmika folder (in PowerShell: `.\Start_OpenAmika.bat`). One console
+starts all of her, and your browser opens **http://localhost:53000** when she is ready: about a minute, a few more
+the very first time. On your first visit she introduces herself and asks your name, your city and, if `brain\.env`
+has none yet, your OpenRouter key. Then press the power button and talk, or type. Click the page once so the browser
+lets her speak.
 
 The light at the top right of every page is her health: green means everything works; click it to see what is not.
-`Stop_OpenAmika.bat` (or Ctrl+C in her console) stops her. To check everything without starting anything, run
-`envs\brain\Scripts\python.exe launch.py --check`: it ends with `result: ready`, or names what to fix.
+Double-click `Stop_OpenAmika.bat` (or press Ctrl+C in her console) to stop her. To check everything without starting
+anything, run `envs\brain\Scripts\python.exe launch.py --check`: it ends with `result: ready`, or names what to fix.
+
+To update her: stop her, run `git stash`, `git pull` and `git stash pop` in the OpenAmika folder (this keeps your
+name, your city and your edits), then run the two setup commands again (they fetch only what changed).
 
 ## If something goes wrong
 
@@ -82,12 +84,14 @@ The light at the top right of every page is her health: green means everything w
 |---|---|
 | `Python 3.11 was not found` | Install Python 3.11 (tick "Add python.exe to PATH"), open a new PowerShell window and run the setup again. |
 | `!! voice MekaHime_Amika  not downloaded: her license was not accepted` | Run `envs\brain\Scripts\python.exe scripts\setup_tts.py` again and type `yes`. |
-| `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401)` | Her files were not public yet, or your `HF_TOKEN` is wrong. Set a read token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) in the same window (`$env:HF_TOKEN = "hf_..."`) and run the command again. |
-| `download failed after 4 tries` or `Check the internet connection` | Run the same command again: it continues where it stopped. |
-| `does not see the GPU (CUDA)` | Update your NVIDIA driver and run the setup again. Without an NVIDIA card: `scripts\setup_windows.ps1 --cpu`. |
-| `settings.json not found` | Run `scripts\setup_windows.ps1` first. |
+| `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401)` | Her files are not public yet, or your `HF_TOKEN` is wrong. Set a read token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) in the same window (`$env:HF_TOKEN = "hf_..."`) and run the command again. |
+| `download failed after 4 tries` or `Check the internet connection` | Run the same command again: it continues where it stopped. If huggingface.co cannot be reached from your network, set `$env:HF_ENDPOINT` to a Hugging Face mirror first; every file is still checked. |
+| `does not see the GPU (CUDA)` | Update your NVIDIA driver and run the setup again. Without an NVIDIA card: `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 --cpu`. |
+| `The filename or extension is too long` | The folder's path is too long for Windows: move OpenAmika to a short folder such as `C:\OpenAmika` and run the setup there. |
+| `settings.json not found` | Run `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1` first. |
 | `No Live2D model yet` on the stage, or `!! Live2D model` / `!! her voice` in `launch.py --check` | Run `envs\brain\Scripts\python.exe scripts\setup_tts.py`. |
 | `no OpenRouter key yet` (`launch.py --check`, the setup summary) | Paste your key in the first-run wizard, or after `OPENROUTER_API_KEY=` in `brain\.env`. |
+| `!! TTS (voice)  port 8002 answers but has no voice MekaHime_Amika` | Another voice server uses her port (OpenSakura's uses 8002 too). Stop it, or give her another port: change `8002` in `tts_url` and in `services.tts` (`--port`, `health`) in `settings.json`. |
 | She answers in text but you hear nothing | Give her voice about 20 seconds after a start, then click the page once. The health light must show TTS green. |
 | Her voice stutters or is very slow | Close other programs that use the graphics card, or turn her eyes off: `"vision": {"enabled": false}` in `settings.json`. |
 
@@ -97,8 +101,10 @@ Every part writes a log in `logs\`. For anything else, ask on [Discord](https://
 
 ## Optional add-ons
 
-- **Fully local**: install [Ollama](https://ollama.com), run `ollama pull qwen3:8b`, then on the Setup page choose
-  Brain → Ollama → Detect models → Use. No key needed.
+- **Fully local**: install [Ollama](https://ollama.com), run `ollama pull qwen3:4b`, then on the Setup page choose
+  Brain → Ollama → Detect models → Use this model. No key needed. `qwen3:4b` fits next to her on a 12–16 GB card (on
+  16 GB, turn her eyes off: `"vision": {"enabled": false}` in `settings.json`); bigger models need a second GPU, or
+  Ollama on another PC (the Setup page takes its address).
 - **Tools**: MCP servers and task agents she can use for you, on the Tools page ([docs/TOOLS.md](docs/TOOLS.md)).
 - **Smart home**: Zigbee plugs she can switch ([IoT/README.md](IoT/README.md)). It stays off until you read and
   accept the IoT safety statement ([docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)) on the Tools page. She runs on

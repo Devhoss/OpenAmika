@@ -1,7 +1,8 @@
 # TTS: the contract, the voice server, and the voice adapter
 
-**Her voice is one command away.** `envs\brain\Scripts\python.exe scripts\setup_tts.py` (after
-`scripts\setup_windows.ps1`; any Python 3.11 runs it) installs Amika's voice and her Live2D model from Hugging Face
+**Her voice is one command away.** `envs\brain\Scripts\python.exe scripts\setup_tts.py` (after the core setup,
+`powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1`; any Python 3.11 runs it) installs Amika's voice
+and her Live2D model from Hugging Face
 (personal-use license, 18+; the script shows it and asks you to accept it first) and the OpenAmika voice server
 (`vendor/tts-engine`, a MekaHime build of GPT-SoVITS, MIT), and `settings.example.json` already has the launcher
 start that server on port 8002. Without a voice server she still works in text: her replies appear as live

@@ -55,7 +55,7 @@ Discord DM / Telegram message (allowed user)
 - The web stage and the bots share one brain and one history. Her replies go to the channel the message
   came from; the stage does not speak a Telegram reply.
 
-## Endpoints (127.0.0.1:5215, local only)
+## Endpoints (127.0.0.1:5215, local only; another port: `messengers_port` in settings.json)
 
 | Route | Purpose |
 |---|---|

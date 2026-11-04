@@ -2,7 +2,8 @@
 
 The speech layer uses [SenseVoiceSmall](https://github.com/FunAudioLLM/SenseVoice) (FunAudioLLM / FunASR) for
 fully local speech-to-text (ASR + language ID + emotion + audio-event tags). Its files are **not** in this
-repository. `scripts\setup_windows.ps1` (`scripts/setup_core.py`) fetches them; by hand (any Python 3 runs it):
+repository. The core setup (`powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1`, which runs
+`scripts/setup_core.py`) fetches them; by hand (any Python 3 runs it):
 
 ```powershell
 envs\brain\Scripts\python.exe scripts\download_sensevoice.py

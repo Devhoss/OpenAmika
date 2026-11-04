@@ -15,10 +15,11 @@ envs\brain\Scripts\python.exe scripts\setup_tts.py --cpu    # no GPU: CPU torch 
 envs\brain\Scripts\python.exe scripts\setup_tts.py --verify # check every file; download and install nothing
 ```
 
-(`envs\brain` comes from `scripts\setup_windows.ps1`; any Python 3.11 can run the script, for example
-`py -3.11 scripts\setup_tts.py`.)
+(`envs\brain` comes from the core setup, `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1`; any
+Python 3.11 can run the script, for example `py -3.11 scripts\setup_tts.py`.)
 
-Then start OpenAmika (`Start_OpenAmika.bat`); `<brain python> launch.py --check` shows the **TTS (voice)** row.
+Then start OpenAmika (double-click `Start_OpenAmika.bat`, or `.\Start_OpenAmika.bat` in PowerShell);
+`<brain python> launch.py --check` shows the **TTS (voice)** row.
 
 **Linux and macOS are untested.** The script has Linux (NVIDIA GPU or `--cpu`) and Apple Silicon (CPU torch
 with MPS) paths, but neither has been run yet; see [Platforms](#platforms).
@@ -30,7 +31,8 @@ it the pinned commit is fetched as a zip). On Linux, glibc 2.28 or newer (Ubuntu
 Rocky 8+); on Ubuntu 22.04, whose `python3` is 3.10, install `python3.11` and `python3.11-venv` first. On a Mac,
 macOS 14 or newer on Apple Silicon with a native arm64 Python (not one running under Rosetta). The script checks
 all of this before installing anything. RTX 50-series cards need the CUDA 12.8 build, which is the default. On
-Windows, keep the folder path short (under about 100 characters) unless long paths are enabled.
+Windows, keep the folder path short (under about 100 characters): even with long paths enabled, Windows cannot load
+some DLLs deep in the venv from a longer folder (`The filename or extension is too long`).
 
 **ffmpeg** is needed only for Opus output (`audio_format: "opus"`; OpenAmika asks for WAV). The script downloads
 a build on Windows and Linux x86_64 (on macOS: `brew install ffmpeg`); without it, Opus requests get WAV and a
@@ -39,9 +41,9 @@ a build on Windows and Linux x86_64 (on macOS: `brew install ffmpeg`); without i
 **Amika's voice** is the Hugging Face repository
 [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). No account or token is needed once
 the repository is public; before that the script needs a read token in `HF_TOKEN` (or a saved `hf auth login`),
-which it sends to the Hugging Face host only, never to the CDN it redirects to, and never prints or stores. A
-refusal says what to do (`Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is not public yet.
-…`). `HF_ENDPOINT` picks a mirror, as in huggingface_hub. It is under MekaHime's
+which it sends to huggingface.co only, never to the CDN it redirects to nor to a mirror, and never prints or stores.
+A refusal says what to do (`Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is not public yet.
+…`). `HF_ENDPOINT` picks a mirror, as in huggingface_hub (every file is still checked). It is under MekaHime's
 personal-use license (`LICENSE` in that repository: personal, hobbyist use, 18+, no training on it, no re-hosting
 or resale, visible credit): the script shows it in short before anything else and downloads the voice only after
 you type `yes`; `--accept-voice-license` accepts it up front for unattended installs. Without it the script
@@ -52,7 +54,8 @@ of the repository at that revision, 250 files); an interrupted download resumes 
 repository, under the same license, holds **her Live2D model** (`live2d/Amika`), downloaded and checked the same way: the
 script puts it into `avatar/models/Amika/`, where the Use page finds it (`--skip-avatar` leaves it out and the
 stage then says "No Live2D model yet"; `--update-avatar` downloads it again and keeps a `banks.json` you edited in
-Setup). After the downloads the script checks that every tag OpenAmika's voice adapter can send (`V1_IDS` in
+Setup, while an unedited one follows a newer pin). After the downloads the script checks that every tag OpenAmika's
+voice adapter can send (`V1_IDS` in
 `speech/voice_adapter.py`, 67 tags) has a clip, and whether `settings.json` starts this server with that voice; it
 never edits `settings.json`.
 

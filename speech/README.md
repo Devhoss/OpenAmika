@@ -27,7 +27,7 @@ it in the speech environment; it binds to 127.0.0.1.
 | `HANE_URL` | `http://127.0.0.1:5202` | the brain |
 | `AMIKA_TTS_URL` / `AMIKA_TTS_CHARACTER` | `http://127.0.0.1:8002` / `MekaHime_Amika` | the voice server and voice id |
 | `AMIKA_VLM_URL` | empty (vision off) | the optional vision service |
-| `AMIKA_MESSENGERS_URL` | `http://127.0.0.1:5215` | the Discord/Telegram service |
+| `AMIKA_MESSENGERS_URL` | `http://127.0.0.1:5215` | the Discord/Telegram service (the launcher sets it from `messengers_port`) |
 
 ## Endpoints
 

@@ -33,35 +33,33 @@ Amikaは、声とテキストでリアルタイムにおしゃべりしてくれ
 
 - Windows 10または11と、NVIDIAのグラフィックカード（RTX 20シリーズ以降、ビデオメモリ8 GB以上。カメラで「見る」機能には16 GB）、そして新しいドライバー
 - [Python 3.11](https://www.python.org/downloads/release/python-3119/)（インストール時に **Add python.exe to PATH** にチェック）と[Git](https://git-scm.com/download/win)
-- 約40 GBの空きディスク。セットアップでは約15〜20 GBをダウンロードし、30〜60分ほどかかります
+- 約45 GBの空きディスク。セットアップでは約15〜20 GBをダウンロードし、30〜60分ほどかかります
 - [OpenRouter](https://openrouter.ai)のキー（数ドル分のクレジットで長く使えます）。脳もPC上で動かしたい場合は[Ollama](https://ollama.com)
 
 ## セットアップ
 
-OneDriveで同期されていないフォルダー（たとえば `C:\`）でPowerShellを開き、次の行を1行ずつ実行してください。
+PowerShell（管理者ではない普通のウィンドウ）を開き、次の行を1行ずつ実行してください。彼女はOneDriveで同期されない短いフォルダー`C:\OpenAmika`に入ります。
 
 ```powershell
+cd C:\
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # 脳・耳・記憶・目
 envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 声とLive2Dモデル：yes と入力
-Start_OpenAmika.bat                                                  # 起動
+.\Start_OpenAmika.bat                                                # 起動
 ```
 
-彼女の声とLive2Dモデルは、MekaHimeの個人利用ライセンス（[ライセンス](#ライセンス)参照）のもとで無料です。2つ目のコマンドが最初にその内容を表示し、`yes`と入力したときだけダウンロードします。
+彼女の声とLive2Dモデルは、MekaHimeの個人利用ライセンス（[ライセンス](#ライセンス)参照）のもとで無料です。`setup_tts.py`の行が最初にその内容を表示し、`yes`と入力したときだけ彼女のファイルをダウンロードします。
 
-どちらのセットアップコマンドも、最後にまとめを表示します。1行に1項目で、完了なら`OK`、問題があれば`!!`と直し方が出ます。同じコマンドをもう一度実行すれば、終わった部分は飛ばして続きから再開します。次の2行が出ていれば、彼女の声と体はそろっています。
-
-```
-  OK voice MekaHime_Amika  ...\Speakers\MekaHime_Amika (downloaded 75 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 75 files verified; 69/69 emotion tags with a clip; ...)
-  OK Live2D model Amika    ...\avatar\models\Amika (downloaded 174 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 174 files verified; AmikaV4.model3.json, 142 motions, 25 expressions)
-```
+どちらのセットアップコマンドも、最後にまとめを表示します。1行に1項目で、完了なら`OK`、問題があれば`!!`と直し方、`--`はお知らせだけです（たとえばOpenRouterのキーがまだないとき。最初に開いたときに入力できます）。同じコマンドをもう一度実行すれば、終わった部分は飛ばして続きから再開します。`setup_tts.py`のまとめに`OK voice MekaHime_Amika`と`OK Live2D model Amika`が出ていれば、彼女の声と体はそろっています。
 
 ## 話しかける
 
-`Start_OpenAmika.bat`を実行するとコンソールが1つ開いて彼女のすべてが起動し、準備ができるとブラウザーで **http://localhost:53000** が開きます（約1分。初回はもう数分かかります）。最初に開いたとき、彼女が自己紹介をして、あなたの名前と住んでいる街、そして`brain\.env`にまだキーがなければOpenRouterのキーをたずねます。あとは電源ボタンを押して話しかけるか、文字で入力してください。ブラウザーが彼女の声を再生できるよう、ページを一度クリックしてください。
+OpenAmikaフォルダーの`Start_OpenAmika.bat`をダブルクリックします（PowerShellでは`.\Start_OpenAmika.bat`）。コンソールが1つ開いて彼女のすべてが起動し、準備ができるとブラウザーで **http://localhost:53000** が開きます（約1分。初回はもう数分かかります）。最初に開いたとき、彼女が自己紹介をして、あなたの名前と住んでいる街、そして`brain\.env`にまだキーがなければOpenRouterのキーをたずねます。あとは電源ボタンを押して話しかけるか、文字で入力してください。ブラウザーが彼女の声を再生できるよう、ページを一度クリックしてください。
 
-各ページ右上のランプは彼女の状態です。緑ならすべて正常で、クリックすると問題のある項目が見られます。`Stop_OpenAmika.bat`（またはコンソールでCtrl+C）で停止します。何も起動せずに全体をチェックするには`envs\brain\Scripts\python.exe launch.py --check`を実行します。最後に`result: ready`と出るか、直すべき項目が表示されます。
+各ページ右上のランプは彼女の状態です。緑ならすべて正常で、クリックすると問題のある項目が見られます。止めるときは`Stop_OpenAmika.bat`をダブルクリックします（またはコンソールでCtrl+C）。何も起動せずに全体をチェックするには`envs\brain\Scripts\python.exe launch.py --check`を実行します。最後に`result: ready`と出るか、直すべき項目が表示されます。
+
+アップデートするには、彼女を止めてからOpenAmikaフォルダーで`git stash`、`git pull`、`git stash pop`を実行し（あなたの名前、街、あなたの編集はそのまま残ります）、2つのセットアップコマンドをもう一度実行します（変わった部分だけを取得します）。
 
 ## うまくいかないとき
 
@@ -69,12 +67,14 @@ Start_OpenAmika.bat                                                  # 起動
 |---|---|
 | `Python 3.11 was not found` | Python 3.11をインストール（「Add python.exe to PATH」にチェック）し、新しいPowerShellウィンドウでセットアップをもう一度実行します。 |
 | `!! voice MekaHime_Amika  not downloaded: her license was not accepted` | `envs\brain\Scripts\python.exe scripts\setup_tts.py`をもう一度実行し、`yes`と入力します。 |
-| `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401)` | 彼女のファイルがまだ公開されていなかったか、`HF_TOKEN`が正しくありません。[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)の読み取りトークンを同じウィンドウで設定し（`$env:HF_TOKEN = "hf_..."`）、同じコマンドをもう一度実行します。 |
-| `download failed after 4 tries` または `Check the internet connection` | 同じコマンドをもう一度実行します。止まったところから続きます。 |
-| `does not see the GPU (CUDA)` | NVIDIAのドライバーを更新して、セットアップをもう一度実行します。NVIDIAのカードがない場合は`scripts\setup_windows.ps1 --cpu`。 |
-| `settings.json not found` | 先に`scripts\setup_windows.ps1`を実行します。 |
+| `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401)` | 彼女のファイルがまだ公開されていないか、`HF_TOKEN`が正しくありません。[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)の読み取りトークンを同じウィンドウで設定し（`$env:HF_TOKEN = "hf_..."`）、同じコマンドをもう一度実行します。 |
+| `download failed after 4 tries` または `Check the internet connection` | 同じコマンドをもう一度実行します。止まったところから続きます。お使いのネットワークからhuggingface.coにつながらない場合は、先に`$env:HF_ENDPOINT`にHugging Faceのミラーを設定してください。どのファイルも同じようにチェックされます。 |
+| `does not see the GPU (CUDA)` | NVIDIAのドライバーを更新して、セットアップをもう一度実行します。NVIDIAのカードがない場合は`powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 --cpu`。 |
+| `The filename or extension is too long` | フォルダーのパスがWindowsには長すぎます。OpenAmikaを`C:\OpenAmika`のような短いフォルダーに移し、そこでセットアップを実行します。 |
+| `settings.json not found` | 先に`powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1`を実行します。 |
 | ステージに`No Live2D model yet`、または`launch.py --check`で`!! Live2D model` / `!! her voice` | `envs\brain\Scripts\python.exe scripts\setup_tts.py`を実行します。 |
 | `no OpenRouter key yet`（`launch.py --check`やセットアップのまとめ） | 初回のウィザードでキーを貼り付けるか、`brain\.env`の`OPENROUTER_API_KEY=`の後ろに書きます。 |
+| `!! TTS (voice)  port 8002 answers but has no voice MekaHime_Amika` | ほかの音声サーバーが彼女のポートを使っています（OpenSakuraのものも8002を使います）。それを止めるか、`settings.json`の`tts_url`と`services.tts`（`--port`と`health`）の`8002`を別の番号に変えます。 |
 | 文字では返事をするのに声が聞こえない | 起動後20秒ほど待ってから、ページを一度クリックします。ランプのTTSが緑になっている必要があります。 |
 | 声が途切れる、またはとても遅い | グラフィックカードを使うほかのアプリを閉じるか、`settings.json`で`"vision": {"enabled": false}`にして目の機能をオフにします。 |
 
@@ -82,7 +82,7 @@ Start_OpenAmika.bat                                                  # 起動
 
 ## オプション機能
 
-- **完全ローカル**：[Ollama](https://ollama.com)をインストールして`ollama pull qwen3:8b`を実行し、Setupページで Brain → Ollama → Detect models → Use を選びます。キーは不要です。
+- **完全ローカル**：[Ollama](https://ollama.com)をインストールして`ollama pull qwen3:4b`を実行し、Setupページで Brain → Ollama → Detect models → Use this model を選びます。キーは不要です。`qwen3:4b`は12〜16 GBのカードなら彼女と一緒に動きます（16 GBでは目をオフに：`settings.json`で`"vision": {"enabled": false}`）。もっと大きなモデルには2枚目のGPUか、別のPCで動くOllamaが必要です（Setupページでそのアドレスを指定できます）。
 - **ツール**：彼女があなたのために使えるMCPサーバーやタスクエージェント。Toolsページで設定します（[docs/TOOLS.md](docs/TOOLS.md)）。
 - **スマートホーム**：彼女が切り替えられるZigbeeプラグ（[IoT/README.md](IoT/README.md)）。ToolsページでIoT安全に関する声明（[docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)）を読んで同意するまでオフのままです。彼女は言語モデルで動いていて間違えることもあるので、暖房器具、錠、バルブなど、危険につながるものは絶対につながないでください。
 - **テキストで話す**：DiscordやTelegramから（[docs/MESSENGERS.md](docs/MESSENGERS.md)）。
