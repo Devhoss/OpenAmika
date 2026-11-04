@@ -138,11 +138,11 @@ def test_smart_home_servers_are_recognised():
     assert smart("iot", {})
     assert smart("plugs", {"command": "python", "args": ["-m", "openamika_iot"]})
     assert smart("plugs", {"command": "openamika-iot"})
-    assert smart("zigbee", {"kind": "iot", "url": "http://10.0.0.9:8010/mcp"})
+    assert smart("zigbee", {"kind": "iot", "url": "http://198.51.100.9:8010/mcp"})
     assert smart("home-assistant", {"url": "http://example.test/sse"})
     assert smart("hass", {})
     assert smart("house", {"url": "http://homeassistant.local:8123/mcp_server/sse"})
-    assert smart("house", {"url": "http://192.168.1.20:8123/api/mcp"})
+    assert smart("house", {"url": "http://192.0.2.20:8123/api/mcp"})
     assert not smart("hermes", {"command": "python", "args": ["-m", "openamika_agents", "hermes"], "kind": "agent"})
     assert not smart("chassis", {"url": "http://127.0.0.1:9000/mcp"})
     assert iot_disclaimer.turns_on_iot(tools_doc(iot_enabled=True))
@@ -346,12 +346,12 @@ def test_a_withdrawn_acceptance_shows_iot_off_and_drops_the_old_session(brain):
 
 def test_home_assistant_and_kind_iot_servers_need_the_statement_too(brain):
     for name, entry in (("home-assistant", {"url": "http://homeassistant.local:8123/mcp_server/sse", "enabled": True}),
-                        ("lights", {"url": "http://10.0.0.5:9000/mcp", "kind": "iot", "enabled": True})):
+                        ("lights", {"url": "http://198.51.100.5:9000/mcp", "kind": "iot", "enabled": True})):
         doc = tools_doc(iot_enabled=False, **{name: entry})
         response = brain.post("/api/build_f/tools/config", "tools-config", {"config": doc})
         assert response.status_code == 409, name
     assert accept(brain).status_code == 200
-    doc = tools_doc(iot_enabled=False, lights={"url": "http://10.0.0.5:9000/mcp", "kind": "iot", "enabled": True})
+    doc = tools_doc(iot_enabled=False, lights={"url": "http://198.51.100.5:9000/mcp", "kind": "iot", "enabled": True})
     assert brain.post("/api/build_f/tools/config", "tools-config", {"config": doc}).status_code == 200
     assert brain.disk()["mcpServers"]["lights"]["kind"] == "iot"          # the marker survives a save
 
