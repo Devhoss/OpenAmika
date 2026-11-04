@@ -92,11 +92,14 @@ _ROLE_TRANSPORTS=('openrouter','alibaba','ollama')
 _NULL_TOKENS={'input_tokens':None,'cached_tokens':None,'output_tokens':None}
 
 
-def _token_fields(tokens,embedding=False):
+def _token_fields(tokens,embedding=False,cache_reported=None):
     """Ledger-normalized counts (fallback when the raw usage is not at hand). Missing usage
-    stays null (never 0): a cancelled stream has no usage record; an embedding has no output."""
+    stays null (never 0): a cancelled stream has no usage record; an embedding has no output.
+    cache_reported False (the ledger row's flag: the provider gave no cache figure, e.g. an
+    embedding) leaves cached_tokens null, so the cache share reads "n/a", not 0 %."""
     if not isinstance(tokens,dict):return dict(_NULL_TOKENS)
-    return {'input_tokens':_count(tokens.get('total_input_tokens')),'cached_tokens':_count(tokens.get('cache_read_tokens')),
+    cached=None if cache_reported is False else _count(tokens.get('cache_read_tokens'))
+    return {'input_tokens':_count(tokens.get('total_input_tokens')),'cached_tokens':cached,
             'output_tokens':None if embedding else _count(tokens.get('output_tokens'))}
 
 
@@ -122,6 +125,8 @@ def raw_token_fields(provider,raw,embedding=False):
     elif provider in ('gemini','gemini_embedding'):
         inp=_count(raw.get('promptTokenCount'))
         cached=_count(raw.get('cachedContentTokenCount'))
+        if cached is None and inp is not None and not embedding and provider=='gemini':
+            cached=0        # a chat call: Gemini leaves cachedContentTokenCount out when nothing was cached
         candidates=_count(raw.get('candidatesTokenCount'))
         out=None if candidates is None else candidates+(_count(raw.get('thoughtsTokenCount')) or 0)
     else:  # OpenAI-compatible usage: OpenRouter, xAI, OpenAI, Groq, DeepSeek
@@ -178,7 +183,7 @@ def ledger_call_receipt(row,marks=None):
     embedding=phase in _EMBEDDING_PHASES
     if row.get('pricing_status')=='missing_usage':token_fields=dict(_NULL_TOKENS)
     elif len(marks)>=3 and isinstance(marks[2],dict):token_fields=raw_token_fields(row.get('provider'),marks[2],embedding)
-    else:token_fields=_token_fields(row.get('tokens'),embedding)
+    else:token_fields=_token_fields(row.get('tokens'),embedding,row.get('cache_reported'))
     return {'turn_id':row.get('turn_id') or '','phase':phase,'status':row.get('status') or 'unknown',
             'model':row.get('actual_model') or row.get('model'),'provider':row.get('provider'),
             'started_ms':_epoch_ms(row.get('started_at')),'first_token_ms':first,

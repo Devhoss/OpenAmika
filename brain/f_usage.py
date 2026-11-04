@@ -17,6 +17,12 @@ token usage but no charge. The transport prices them from the reviewed price tab
 (f_openrouter.normalize_alibaba_usage: input tiers, peak hours, cached input) and passes
 that amount as ``reported_cost_usd``; it is recorded with ``cost_source`` "price_table".
 Without it the row falls back to this meter's snapshot rates like any native provider.
+
+Prompt cache: ``cache_reported`` (per row) says whether the provider's usage carried a
+cache figure at all (OpenRouter / OpenAI-style ``prompt_tokens_details.cached_tokens``,
+Anthropic ``cache_read_input_tokens``, Gemini on every chat call). Ollama and the local
+embedder never report one, so their calls have no cache share ("n/a"), not 0 %. The
+summaries' ``cache_hit_pct`` is cache reads over the input tokens of reporting calls only.
 """
 from __future__ import annotations
 
@@ -46,6 +52,22 @@ STATUS_VALUES = {"complete", "drained", "cancelled", "failed", "unknown"}
 FINAL_STATUSES = ("complete", "drained")
 # Providers that report tokens but no cost; their transport supplies the price-table amount.
 PRICE_TABLE_PROVIDERS = {"alibaba"}
+# Prompt cache. Embeddings are never served from a prompt cache; rows written before the
+# per-row ``cache_reported`` flag existed are judged by what their provider normally reports.
+EMBEDDING_PHASES = ("query_embedding", "memory_embedding")
+CACHE_REPORTING_PROVIDERS = {"anthropic", "openai", "xai", "groq", "openrouter", "deepseek", "alibaba", "gemini"}
+
+
+def row_cache_reported(row) -> bool:
+    """Whether this ledger row's provider reported a prompt-cache figure (its cache share is known)."""
+    keys = row.keys() if hasattr(row, "keys") else ()
+    value = row["cache_reported"] if "cache_reported" in keys else None
+    if value is not None:
+        return bool(value)
+    model, phase = str(row["model"] or "").lower(), str(row["phase"] or "")
+    # helper (agent:<server>) bookings are priced from the tokens the agent reports, with no cache figure
+    return (row["provider"] in CACHE_REPORTING_PROVIDERS and phase not in EMBEDDING_PHASES
+            and not phase.startswith("agent:") and "embed" not in model)
 
 
 class BudgetExceeded(RuntimeError):
@@ -129,9 +151,11 @@ def normalize_usage(provider: str, usage: dict | None, model: str = "") -> dict:
         recognized_count = True
         return int(value)
 
+    cache_reported = False      # did the usage carry a prompt-cache figure at all (see the module docstring)
     if provider == "anthropic":
         tokens["input_uncached_tokens"] = count("input_tokens", required=True)
         tokens["output_tokens"] = count("output_tokens", required=True)
+        cache_reported = raw.get("cache_read_input_tokens") is not None or raw.get("cache_creation_input_tokens") is not None
         tokens["cache_read_tokens"] = count("cache_read_input_tokens")
         creation = count("cache_creation_input_tokens")
         breakdown = raw.get("cache_creation") or {}
@@ -157,7 +181,12 @@ def normalize_usage(provider: str, usage: dict | None, model: str = "") -> dict:
         tokens["output_tokens"] = count("completion_tokens", required=not embedding)
         details = raw.get("prompt_tokens_details") or {}
         details = details if isinstance(details, dict) else {}
-        cached = count("cached_tokens", details)
+        if details.get("cached_tokens") is None and raw.get("prompt_cache_hit_tokens") is not None:
+            cached = count("prompt_cache_hit_tokens")              # DeepSeek's own API
+            cache_reported = not embedding
+        else:
+            cache_reported = details.get("cached_tokens") is not None and not embedding
+            cached = count("cached_tokens", details)
         if cached > prompt:
             issues.append("cached_tokens_exceed_prompt")
             cached = prompt
@@ -166,6 +195,13 @@ def normalize_usage(provider: str, usage: dict | None, model: str = "") -> dict:
         details = raw.get("completion_tokens_details") or {}
         tokens["reasoning_tokens"] = count("reasoning_tokens", details if isinstance(details, dict) else {})
         # OpenAI-compatible completion_tokens already includes reasoning tokens.
+    elif provider == "ollama":
+        # Ollama's counts (f_ollama maps prompt_eval_count / eval_count onto prompt_tokens / completion_tokens).
+        # Ollama reuses its own KV cache but never reports how much: these calls have no cache share.
+        prompt_key = "prompt_tokens" if "prompt_tokens" in raw else "prompt_eval_count"
+        output_key = "completion_tokens" if "completion_tokens" in raw else "eval_count"
+        tokens["input_uncached_tokens"] = count(prompt_key, required=True)
+        tokens["output_tokens"] = count(output_key, required=True)
     elif provider == "gemini":
         prompt = count("promptTokenCount", required=True)
         cached = count("cachedContentTokenCount")
@@ -175,6 +211,7 @@ def normalize_usage(provider: str, usage: dict | None, model: str = "") -> dict:
         tokens["input_uncached_tokens"] = prompt - cached
         tokens["cache_read_tokens"] = cached
         embedding = "embed" in model.lower()
+        cache_reported = not embedding     # Gemini leaves cachedContentTokenCount out when nothing was cached
         candidates = count("candidatesTokenCount", required=not embedding)
         thoughts = count("thoughtsTokenCount")
         tokens["output_tokens"] = candidates + thoughts
@@ -185,7 +222,8 @@ def normalize_usage(provider: str, usage: dict | None, model: str = "") -> dict:
         "input_uncached_tokens", "cache_read_tokens", "cache_write_5m_tokens",
         "cache_write_1h_tokens", "cache_write_unknown_tokens"))
     tokens["total_tokens"] = tokens["total_input_tokens"] + tokens["output_tokens"]
-    return {"tokens": tokens, "complete": not issues, "issues": issues, "has_usage": recognized_count}
+    return {"tokens": tokens, "complete": not issues, "issues": issues, "has_usage": recognized_count,
+            "cache_reported": bool(cache_reported and recognized_count)}
 
 
 def _pricing(value: dict | str | Path | None) -> dict:
@@ -256,7 +294,9 @@ class UsageMeter:
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(requests)")}
             for name, kind in (("estimated_cost_usd", "REAL"), ("cost_source", "TEXT"),
                                ("actual_model", "TEXT"), ("actual_provider", "TEXT"),
-                               ("provider_request_id", "TEXT"), ("discarded", "INTEGER")):
+                               ("provider_request_id", "TEXT"), ("discarded", "INTEGER"),
+                               # 1/0: the usage carried a prompt-cache figure; NULL: older row (row_cache_reported)
+                               ("cache_reported", "INTEGER")):
                 if name not in columns:
                     conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {kind}")
             # Settlement columns and key_usage_snapshots (additive, in place), then
@@ -391,6 +431,7 @@ class UsageMeter:
                 raise KeyError("Unknown usage request")
             normalized = normalize_usage(row["provider"], usage, row["model"])
             tokens, issues = normalized["tokens"], list(normalized["issues"])
+            cache_reported = int(normalized["cache_reported"]) if normalized["has_usage"] else None
             complete = normalized["complete"] and status in FINAL_STATUSES
             is_router = row["provider"] == "openrouter"
             raw = usage if isinstance(usage, dict) else {}
@@ -411,6 +452,7 @@ class UsageMeter:
                     # A later billing receipt may contain cost only. Retain known token
                     # counts and request outcome while resolving the held reservation.
                     tokens = json.loads(row["tokens_json"]) if row["tokens_json"] else tokens
+                    cache_reported = row["cache_reported"]
                     complete = bool(row["usage_complete"])
                     status = row["status"]
                     issues = [issue for issue in json.loads(row["issues_json"])
@@ -462,11 +504,11 @@ class UsageMeter:
             discarded = 1 if status == "drained" else row["discarded"]
             conn.execute("""UPDATE requests SET finished_at=?,status=?,tokens_json=?,usage_complete=?,
                 pricing_status=?,cost_usd=?,issues_json=?,error_code=?,estimated_cost_usd=?,cost_source=?,
-                actual_model=?,actual_provider=?,provider_request_id=?,discarded=? WHERE id=?""",
+                actual_model=?,actual_provider=?,provider_request_id=?,discarded=?,cache_reported=? WHERE id=?""",
                          (_now(), status, json.dumps(tokens), int(complete), pricing_status, cost,
                           json.dumps(issues), _error_code(error) or row["error_code"], estimated_cost, cost_source,
                           metadata["actual_model"], metadata["actual_provider"], metadata["provider_request_id"],
-                          discarded, request_id))
+                          discarded, cache_reported, request_id))
             # Settlement bookkeeping in the same transaction: pending (has an
             # OpenRouter id), no_id + estimate, or cleared once confirmed.
             refresh_row(conn, request_id)
@@ -485,6 +527,9 @@ class UsageMeter:
                     "estimated_unrecorded_usd", "estimate_basis"):
             result[key] = row[key]
         result["discarded"] = bool(row["discarded"])
+        # Whether the provider reported a prompt-cache figure (None: the call has no usage)
+        no_usage = not row["tokens_json"] or row["pricing_status"] == "missing_usage"
+        result["cache_reported"] = None if no_usage else row_cache_reported(row)
         return result
 
     # A request still "started" after this long never finished: the thread that began it is gone (an
@@ -537,7 +582,10 @@ class UsageMeter:
                     "no_id_calls": 0, "failed_settlement_calls": 0, "partial_recorded_calls": 0,
                     "estimated_calls": 0, "estimated_unrecorded_usd": 0.0,
                     # Drained speculative calls: recorded usage, so already in priced_known_usd.
-                    "drained_calls": 0, "drained_usd": 0.0}
+                    "drained_calls": 0, "drained_usd": 0.0,
+                    # Prompt cache: only calls whose provider reports a cache figure count (row_cache_reported);
+                    # chat calls that report none (Ollama) are counted apart, embeddings never.
+                    "cache_input_tokens": 0, "cache_read_tokens": 0, "cache_unreported_requests": 0}
         def add(group: dict, row: sqlite3.Row):
             group["requests"] += 1
             group["priced_known_usd"] += row["cost_usd"] or 0
@@ -548,8 +596,15 @@ class UsageMeter:
                 group["unconfirmed_estimate_usd"] += row["estimated_cost_usd"] or 0
             if row["cost_source"] == "provider_reported":
                 group["provider_reported_usd"] += row["cost_usd"] or 0
-            for key, value in (json.loads(row["tokens_json"]) if row["tokens_json"] else {}).items():
+            tokens = json.loads(row["tokens_json"]) if row["tokens_json"] else {}
+            for key, value in tokens.items():
                 group["tokens"][key] += value
+            if tokens and row["pricing_status"] != "missing_usage":
+                if row_cache_reported(row):
+                    group["cache_input_tokens"] += tokens.get("total_input_tokens", 0)
+                    group["cache_read_tokens"] += tokens.get("cache_read_tokens", 0)
+                elif row["phase"] not in EMBEDDING_PHASES and not str(row["phase"]).startswith("agent:"):
+                    group["cache_unreported_requests"] += 1
             if row["status"] == "drained":
                 group["drained_calls"] += 1
                 group["drained_usd"] += row["cost_usd"] or 0
@@ -565,6 +620,9 @@ class UsageMeter:
                 group["estimated_unrecorded_usd"] += part["estimate"]
         def finalize(group: dict) -> dict:
             group["total_estimated_usd"] = group["priced_known_usd"] + group["settled_extra_usd"] + group["estimated_unrecorded_usd"]
+            # None = no call in this group reported a cache figure ("n/a"), never 0 %
+            group["cache_hit_pct"] = (100.0 * group["cache_read_tokens"] / group["cache_input_tokens"]
+                                      if group["cache_input_tokens"] else None)
             return group
         total, phases, models = empty(), {}, {}
         # Her own calls vs the helpers' runs (phase "agent:<server>", booked by f_tools from the tokens the agent
@@ -589,10 +647,14 @@ class UsageMeter:
         amika_tokens = amika["tokens"]
         amika_input = amika_tokens.get("total_input_tokens") or (amika_tokens.get("input_uncached_tokens", 0) + amika_tokens.get("cache_read_tokens", 0))
         split = {
+            # cache_hit_pct = cache_read_tokens / cache_input_tokens over her calls whose provider reports a cache
+            # figure (embeddings and Ollama excluded: their share is unknown, not 0 %); input_tokens is all her input.
             "amika": {"cost_usd": amika["total_estimated_usd"], "requests": amika["requests"], "dialogues": len(dialogues),
                       "avg_per_dialogue_usd": (amika["total_estimated_usd"] / len(dialogues)) if dialogues else None,
-                      "cache_read_tokens": amika_tokens.get("cache_read_tokens", 0), "input_tokens": amika_input,
-                      "cache_hit_pct": (100.0 * amika_tokens.get("cache_read_tokens", 0) / amika_input) if amika_input else None},
+                      "cache_read_tokens": amika["cache_read_tokens"], "input_tokens": amika_input,
+                      "cache_input_tokens": amika["cache_input_tokens"],
+                      "cache_unreported_requests": amika["cache_unreported_requests"],
+                      "cache_hit_pct": amika["cache_hit_pct"]},
             "agents": {"cost_usd": agents["total_estimated_usd"], "requests": agents["requests"],
                        "avg_per_request_usd": (agents["total_estimated_usd"] / agents["requests"]) if agents["requests"] else None,
                        "input_tokens": agents["tokens"].get("total_input_tokens") or agents["tokens"].get("input_uncached_tokens", 0),
