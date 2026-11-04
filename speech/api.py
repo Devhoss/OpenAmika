@@ -2380,7 +2380,16 @@ class TimelineBook:
         t = {"input": self._sum(r.get("input_tokens") for r in rs),
              "cached": self._sum(r.get("cached_tokens") for r in rs),
              "output": self._sum(r.get("output_tokens") for r in rs)}
-        return t if any(v is not None for v in t.values()) else None
+        if not any(v is not None for v in t.values()):
+            return None
+        # the input of the calls that reported a cache figure: the denominator of the cache share (Ollama reports
+        # none, so its calls neither count as cached nor as missed)
+        t["cache_input"] = self._cache_input(rs)
+        return t
+
+    def _cache_input(self, rs):
+        return self._sum(r.get("input_tokens") for r in rs
+                         if self._num(r.get("cached_tokens")) is not None and self._num(r.get("input_tokens")) is not None)
 
     def _cost(self, rs):
         c = self._sum(r.get("cost_usd") for r in rs)
@@ -2507,9 +2516,13 @@ class TimelineBook:
         if rd["origin"] == "reflection" and rd["reflection"] is not None:
             llm.append(rd["reflection"])
         total_in = self._sum(r.get("input_tokens") for r in llm)
-        cached = self._sum(r.get("cached_tokens") for r in llm
-                           if self._num(r.get("input_tokens")) is not None)
-        cached_pct = round(100.0 * cached / total_in, 1) if total_in and cached is not None else None
+        # Prompt cache share over the calls that reported a cache figure only: a provider that reports none
+        # (Ollama) leaves cached_tokens null, and its input must not count as a miss. None = "n/a".
+        reporting = [r for r in llm if self._num(r.get("input_tokens")) is not None
+                     and self._num(r.get("cached_tokens")) is not None]
+        cached = self._sum(r.get("cached_tokens") for r in reporting)
+        cache_in = self._sum(r.get("input_tokens") for r in reporting)
+        cached_pct = round(100.0 * cached / cache_in, 1) if cache_in else None
         every = list(rd["receipts"]) + ([rd["reflection"]] if rd["origin"] == "reflection" and rd["reflection"] else [])
         cost = self._cost(every) if every else None
         t0 = self._round_start(rd, marks)
@@ -2528,6 +2541,8 @@ class TimelineBook:
                 "latency_to_surface_ms": latency, "surface_to_deep_gap_ms": gap,
                 "total_input_tokens": total_in, "cached_pct": cached_pct, "cost_usd": cost,
                 "round_duration_ms": duration,
+                # additive: the numbers behind cached_pct (null when no call reported a cache figure)
+                "cached_tokens": cached if cache_in else None, "cache_input_tokens": cache_in,
             },
             # additive fields (not in §1.2's list; the browser may ignore them)
             "input": rd["input"], "status": rd["status"], "forced": rd["forced"],

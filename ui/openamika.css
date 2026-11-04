@@ -643,9 +643,13 @@ select option, select optgroup { background: #241627; color: var(--pearl); }
 
 /* latency chart */
 .lat-chart { display: flex; flex-direction: column; gap: 7px; }
-.lat-row { display: grid; grid-template-columns: 54px 1fr 64px; gap: 10px; align-items: center; }
+.lat-row { display: grid; grid-template-columns: 54px 1fr 46px 64px; gap: 10px; align-items: center; }
 .lat-row .rid { font-size: 11px; color: var(--faint); letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
 .lat-row .total { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* prompt cache hit of the round: text in the muted ink, never a series colour */
+.lat-row .cache { font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
+.lat-row .cache.na { color: var(--faint); }
+.viz-legend .cache-key { cursor: help; }
 .lat-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: rgba(245, 235, 228, .05); }
 .lat-seg {
   position: absolute; top: 0; bottom: 0; border-radius: 3px;

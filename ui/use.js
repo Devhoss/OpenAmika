@@ -671,12 +671,48 @@ registerProcessor('pcm-pusher', PCMPusher);`;
     { key: "writer_llm", label: "Memory writer", v: "--viz-writer" },
   ];
   const PHASE_KEY = { reflection: "reflection_llm", query_embedding: "embedding", surface: "surface_llm", deep: "deep_llm", memory_write: "writer_llm" };
+  // the LLM calls whose prompt cache counts toward a round's cache hit (the speech server's round_summary.cached_pct)
+  const LLM_KEYS = ["reflection_llm", "surface_llm", "deep_llm", "writer_llm"];
+  const CACHE_NOTE = "Prompt cache hit: the share of the round's prompt tokens (surface, deep, reflection, memory writer) " +
+    "that the provider read from its prompt cache. n/a: the model reports no cache figures (Ollama).";
   $("latLegend").replaceChildren(...PHASES.map((p) =>
-    el("span", { class: "key" }, el("i", { style: "background:var(" + p.v + ")" }), p.label)));
+    el("span", { class: "key" }, el("i", { style: "background:var(" + p.v + ")" }), p.label)),
+    el("span", { class: "key cache-key", title: CACHE_NOTE }, "% = prompt cache hit"));
 
   const rounds = new Map();   // turn_id -> {order, segments: Map(key->[t0,t1]), extra: Map(key->{model,cost,tokens}), summary}
   let order = 0;
   const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+  // Prompt cache share = cached tokens / the input of the calls that reported a cache figure. A call that reports
+  // none (Ollama: cached is null) is "n/a", never a 0 % miss.
+  function cacheInput(t) {
+    if (!t || num(t.cached) === null) return null;
+    return num(t.cache_input) !== null ? num(t.cache_input) : num(t.input);
+  }
+  function tokensLine(t) {
+    if (!t) return null;
+    const cached = num(t.cached), base = cacheInput(t);
+    const cache = cached === null ? "cache n/a"
+      : fmt.int(cached) + " cached" + (base ? " (" + fmt.pct((100 * cached) / base) + ")" : "");
+    return `tokens ${fmt.int(num(t.input))} in · ${cache} · ${fmt.int(num(t.output))} out`;
+  }
+  // {pct, cached, input} for a round, {pct: null} when its calls report no cache figures, null before any LLM figures
+  function roundCache(round) {
+    const s = round.summary || {};
+    if (num(s.cached_pct) !== null) {
+      return { pct: num(s.cached_pct), cached: num(s.cached_tokens), input: num(s.cache_input_tokens) };
+    }
+    let cached = 0, input = 0, tokens = num(s.total_input_tokens) || 0;
+    for (const key of LLM_KEYS) {
+      const t = (round.extra.get(key) || {}).tokens;
+      if (!t) continue;
+      tokens += num(t.input) || 0;
+      const base = cacheInput(t);
+      if (base !== null) { cached += num(t.cached); input += base; }
+    }
+    if (input > 0) return { pct: (100 * cached) / input, cached, input };
+    return tokens > 0 ? { pct: null } : null;
+  }
 
   function spanOf(entry) {
     const solid = Array.isArray(entry.solid) ? entry.solid : null;
@@ -724,7 +760,8 @@ registerProcessor('pcm-pusher', PCMPusher);`;
     round.extra.set(key, {
       model: prev.model || r.model,
       cost: prev.cost != null ? prev.cost : num(r.cost_usd),
-      tokens: prev.tokens || { input: num(r.input_tokens), cached: num(r.cached_tokens), output: num(r.output_tokens) },
+      tokens: prev.tokens || { input: num(r.input_tokens), cached: num(r.cached_tokens), output: num(r.output_tokens),
+        cache_input: num(r.cached_tokens) !== null ? num(r.input_tokens) : null },
     });
     if (!round.segments.has(key) && num(r.started_ms) !== null) {
       const end = num(r.last_token_ms) !== null ? r.last_token_ms
@@ -771,16 +808,22 @@ registerProcessor('pcm-pusher', PCMPusher);`;
         seg.addEventListener("mousemove", (event) => showTip(event, phase.label, [
           fmt.ms(span[1] - span[0]) + " · starts +" + fmt.ms(span[0] - t0),
           extra.model ? String(extra.model) : null,
-          extra.tokens ? `tokens ${fmt.int(extra.tokens.input)} in (${fmt.int(extra.tokens.cached)} cached) / ${fmt.int(extra.tokens.output)} out` : null,
+          tokensLine(extra.tokens),
           extra.cost != null ? "cost " + fmt.usd(extra.cost) : null,
         ]));
         seg.addEventListener("mouseleave", hideTip);
         track.append(seg);
       }
       const rid = tid.length > 7 ? "…" + tid.slice(-6) : tid;
+      const cache = roundCache(round);
+      const cacheTitle = !cache ? null : cache.pct === null
+        ? "Prompt cache hit: n/a (this model reports no cache figures)"
+        : "Prompt cache hit: " + fmt.int(cache.cached) + " of " + fmt.int(cache.input) + " prompt tokens read from cache";
       box.append(el("div", { class: "lat-row" },
         el("span", { class: "rid", text: rid }),
         track,
+        el("span", { class: "cache" + (cache && cache.pct === null ? " na" : ""), title: cacheTitle,
+          text: !cache ? "" : cache.pct === null ? "n/a" : fmt.pct(cache.pct) }),
         el("span", { class: "total", text: fmt.s1(total) })));
       const first = num(round.summary.latency_to_surface_ms);
       if (first !== null) firsts.push(first);
@@ -790,6 +833,34 @@ registerProcessor('pcm-pusher', PCMPusher);`;
       $("statFirst").innerHTML = "";
       $("statFirst").append((avg / 1000).toFixed(2), el("small", { text: " s" }));
     }
+  }
+
+  // ── prompt cache hit, display period (f_usage summary). Hers alone: agent bookings carry no cache figures. Only her
+  // calls whose provider reports a cache figure count; embeddings never do, Ollama reports none ("n/a", not 0 %). ──
+  const ROLE_NAMES = { surface: "surface", deep: "deep", reflection: "reflection", memory_write: "memory writer" };
+  function renderCacheTile(amika, usage) {
+    const value = $("statCache"), sub = $("statCacheSub"), tile = value.closest(".stat-tile");
+    const pct = amika ? num(amika.cache_hit_pct) : null;
+    const unreported = amika ? num(amika.cache_unreported_requests) || 0 : 0;
+    const calls = (n) => fmt.int(n) + (n === 1 ? " call" : " calls");
+    const order = Object.keys(ROLE_NAMES);
+    const roles = (Array.isArray(usage.by_phase) ? usage.by_phase : [])
+      .filter((p) => ROLE_NAMES[p.phase] && num(p.cache_hit_pct) !== null)
+      .sort((a, b) => order.indexOf(a.phase) - order.indexOf(b.phase))
+      .map((p) => ROLE_NAMES[p.phase] + " " + fmt.pct(num(p.cache_hit_pct)));
+    if (pct !== null) {
+      const base = num(amika.cache_input_tokens) !== null ? num(amika.cache_input_tokens) : num(amika.input_tokens);
+      value.textContent = fmt.pct(pct);
+      sub.textContent = fmt.int(num(amika.cache_read_tokens)) + " of " + fmt.int(base) + " prompt tokens from cache" +
+        (unreported ? " · " + calls(unreported) + " n/a (no cache figures)" : "") + " · agents excluded";
+    } else if (unreported) {
+      value.textContent = "n/a";
+      sub.textContent = "her model reports no prompt cache figures (Ollama) · " + calls(unreported);
+    } else {
+      value.textContent = "—";
+      sub.textContent = "prompt tokens read from cache";
+    }
+    if (tile) tile.title = roles.length ? "By role: " + roles.join(" · ") : "";
   }
 
   // ── usage / status polling ──
@@ -813,18 +884,7 @@ registerProcessor('pcm-pusher', PCMPusher);`;
       $("statCostAgentsSub").textContent = requests
         ? fmt.usd(num(agents.avg_per_request_usd) || 0) + " / request · " + fmt.int(requests) + (requests === 1 ? " request" : " requests")
         : "no requests";
-      // cache hit is hers alone: agent bookings carry no cache figures and would drag the number down
-      if (amika && amika.cache_hit_pct !== null && amika.cache_hit_pct !== undefined) {
-        $("statCache").textContent = fmt.pct(num(amika.cache_hit_pct));
-        $("statCacheSub").textContent = fmt.int(num(amika.cache_read_tokens)) + " of " + fmt.int(num(amika.input_tokens)) + " of her prompt tokens · agents excluded";
-      } else {
-        const tokens = usage.tokens || {};
-        const input = num(tokens.total_input_tokens), cached = num(tokens.cache_read_tokens);
-        if (input && cached !== null) {
-          $("statCache").textContent = fmt.pct((cached / Math.max(1, input)) * 100);
-          $("statCacheSub").textContent = fmt.int(cached) + " of " + fmt.int(input) + " input tokens";
-        }
-      }
+      renderCacheTile(amika, usage);
     } catch (_) {
       setNavDot(0, "err");
     }
