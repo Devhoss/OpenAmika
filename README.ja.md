@@ -34,7 +34,16 @@ Amikaは、声とテキストでリアルタイムにおしゃべりしてくれ
 - Windows 10または11と、NVIDIAのグラフィックカード（RTX 20シリーズ以降、ビデオメモリ8 GB以上。カメラで「見る」機能には16 GB）、そして新しいドライバー
 - [Python 3.11](https://www.python.org/downloads/release/python-3119/)（インストール時に **Add python.exe to PATH** にチェック）と[Git](https://git-scm.com/download/win)
 - 約45 GBの空きディスク。セットアップでは約15〜20 GBをダウンロードし、30〜60分ほどかかります
-- [OpenRouter](https://openrouter.ai)のキー（数ドル分のクレジットで長く使えます）。脳もPC上で動かしたい場合は[Ollama](https://ollama.com)
+- 言語モデル用の[OpenRouter](https://openrouter.ai)のキー（おすすめ。費用は月に数ドルほどです）。または[Ollama](https://ollama.com)と、27B以上のモデルを動かせるグラフィックカード（[どの言語モデルを使う？](#どの言語モデルを使う)を参照）
+
+## どの言語モデルを使う？
+
+彼女の耳・声・記憶・目は、いつもあなたのPCで動きます。考えて返事を書く部分、つまり言語モデルの動かし方は2通りあります。
+
+- **セミローカル（おすすめ）**：あなた自身のキーで[OpenRouter](https://openrouter.ai)を使います。ほとんどの場合はこちらのほうが良い選択です。彼女がテストされたモデルで動き、返事も速く、費用は月に数ドルだけです（1日30ターン話して約1.5ドル、100ターンで約5ドル）。
+- **完全ローカル**：[Ollama](https://ollama.com)を使って、あなたのPCの上で動かします。**27B（パラメーター数270億）以上**のモデルを使ってください。フルで安定した体験には**70B以上**がおすすめです。27Bより小さいモデルは品質がかなり悪くなることがあり、彼女らしさが崩れたり、話したことを忘れたり、返事の形式が壊れたりします。
+
+ローカルのモデルには、彼女の耳・記憶・声が使う約6 GB（目も使うと約10 GB）とは別に、モデル自身のビデオメモリが必要です。`gemma3:27b`のような27Bのモデルで約19 GB、`qwen3:32b`のような32Bのモデルで約24 GB、70Bのモデル（`llama3.3:70b`、`qwen2.5:72b`）では46〜50 GBです。つまり、32 GBのカード（RTX 5090）1枚なら27Bのモデルと彼女の全機能が収まりますが（32Bのモデルは目をオフにした場合だけ）、24 GBのカードには収まりません。70Bのモデルを彼女と同じカードで動かせるのは、72〜96 GBのワークステーション向けカードだけです。それ以外の場合は、2台目のPCでOllamaを動かすか（Setupページでそのアドレスを指定できます）、セミローカルのままにしてください。切り替え方は[オプション機能](#オプション機能)にあります。
 
 ## セットアップ
 
@@ -77,12 +86,14 @@ OpenAmikaフォルダーの`Start_OpenAmika.bat`をダブルクリックしま�
 | `!! TTS (voice)  port 8002 answers but has no voice MekaHime_Amika` | ほかの音声サーバーが彼女のポートを使っています（OpenSakuraのものも8002を使います）。それを止めるか、`settings.json`の`tts_url`と`services.tts`（`--port`と`health`）の`8002`を別の番号に変えます。 |
 | 文字では返事をするのに声が聞こえない | 起動後20秒ほど待ってから、ページを一度クリックします。ランプのTTSが緑になっている必要があります。 |
 | 声が途切れる、またはとても遅い | グラフィックカードを使うほかのアプリを閉じるか、`settings.json`で`"vision": {"enabled": false}`にして目の機能をオフにします。 |
+| Ollamaで彼女らしくない、話したことを忘れる、返事が崩れる | モデルが小さすぎます。27B以上（フルで安定した体験には70B以上）のモデルを使うか、OpenRouterに戻してください：Setup → Brain → OpenRouter → 「Switch back to the OpenRouter preset」。 |
+| Ollamaだと返事がとても遅い | モデルが彼女と一緒にビデオメモリに収まっていません（`ollama ps`の表示が`100% GPU`ではなく、CPU/GPUの割合になります）。[どの言語モデルを使う？](#どの言語モデルを使う)を参照してください。 |
 
 各パーツのログは`logs\`にあります。それでも解決しないときは、[Discord](https://discord.gg/mekahime)で質問するか、[issue](https://github.com/zeekk0/OpenAmika/issues)を作成してください。AIコーディングエージェントを使う場合は、[README_IF_YOU_ARE_AI_AGENT.md](README_IF_YOU_ARE_AI_AGENT.md)を読ませてください。
 
 ## オプション機能
 
-- **完全ローカル**：[Ollama](https://ollama.com)をインストールして`ollama pull qwen3:4b`を実行し、Setupページで Brain → Ollama → Detect models → Use this model を選びます。キーは不要です。`qwen3:4b`は12〜16 GBのカードなら彼女と一緒に動きます（16 GBでは目をオフに：`settings.json`で`"vision": {"enabled": false}`）。もっと大きなモデルには2枚目のGPUか、別のPCで動くOllamaが必要です（Setupページでそのアドレスを指定できます）。
+- **完全ローカル**：[Ollama](https://ollama.com)をインストールして`ollama pull gemma3:27b`を実行し（17 GB。27B以上のほかのモデルでも構いません。[どの言語モデルを使う？](#どの言語モデルを使う)を参照）、Setupページで Brain → Ollama → Detect models → Use this model を選びます。キーは不要です。別のPCで動くOllamaを使う場合は、Detect modelsの前にそのアドレスを入力してください。
 - **ツール**：彼女があなたのために使えるMCPサーバーやタスクエージェント。Toolsページで設定します（[docs/TOOLS.md](docs/TOOLS.md)）。
 - **スマートホーム**：彼女が切り替えられるZigbeeプラグ（[IoT/README.md](IoT/README.md)）。ToolsページでIoT安全に関する声明（[docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)）を読んで同意するまでオフのままです。彼女は言語モデルで動いていて間違えることもあるので、暖房器具、錠、バルブなど、危険につながるものは絶対につながないでください。
 - **テキストで話す**：DiscordやTelegramから（[docs/MESSENGERS.md](docs/MESSENGERS.md)）。

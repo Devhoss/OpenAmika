@@ -182,7 +182,7 @@ and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/P
 | GPT-SoVITS code | voice server | `RVC-Boss/GPT-SoVITS` @ `b4570b876f5c` (git, or the zip checked by a tree SHA-256) | tens of MB | `vendor/tts-engine/GPT-SoVITS/` | commit; `TTS_infer_pack/TTS.py` SHA-256 | `setup_tts.py` |
 | HuBERT, RoBERTa, ERes2NetV2 speaker model | voice server | Hugging Face `lj1995/GPT-SoVITS` @ `8f88575` | 948 MB | `GPT-SoVITS/GPT_SoVITS/pretrained_models/` | size + SHA-256 | `setup_tts.py` |
 | fastText `lid.176.bin`, G2PW (Chinese polyphones), nltk data, ffmpeg (Opus only) | voice server | dl.fbaipublicfiles.com; `XXXXRT/GPT-SoVITS-Pretrained` @ `0c47645`; nltk_data @ `550b662`; gyan.dev 8.0.1 | 131 MB; 589 MB zip; 5 MB; 106 MB | `vendor/tts-engine/...` | size + SHA-256 | `setup_tts.py` |
-| LLMs (default preset) | the four roles | OpenRouter: `deep` = `z-ai/glm-5` (no reasoning), `surface` and `reflection` = `deepseek/deepseek-v4.1-flash`, `memory_write` = `z-ai/glm-5.3`; or any Ollama model | – | the cloud / Ollama | – | the person (key or `ollama pull`) |
+| LLMs (default preset) | the four roles | OpenRouter (Semi-Local, recommended): `deep` = `z-ai/glm-5` (no reasoning), `surface` and `reflection` = `deepseek/deepseek-v4.1-flash`, `memory_write` = `z-ai/glm-5.3`; or, Fully Local, an Ollama model of 27B or more (§5.4) | – (Ollama: 17 GB for a 27B model, 43–47 GB for a 70B one) | the cloud / Ollama | – | the person (key or `ollama pull`) |
 
 `HF_ENDPOINT` (a Hugging Face mirror) is honored by `setup_tts.py`, as by huggingface_hub; every file is still checked
 against its pinned SHA-256. `MekaHime/MekaHime_Amika` is public from OpenAmika's public release on; before that,
@@ -200,7 +200,8 @@ Two CUDA torch builds are downloaded: 2.10.0 for the core environments, 2.9.1 fo
 ## 5. Setup, step by step
 
 Prerequisites: Windows 10/11; an NVIDIA GPU (RTX 20-series or newer; 8 GB VRAM for her ears, memory and voice,
-16 GB with her eyes) with a recent driver; Python 3.11 64-bit (python.org, "Add python.exe to PATH", or
+16 GB with her eyes) with a recent driver; for her LLM an OpenRouter key (recommended) or, Fully Local, Ollama with a
+model of 27B or more and the GPU memory for it (§5.4); Python 3.11 64-bit (python.org, "Add python.exe to PATH", or
 `winget install -e --id Python.Python.3.11`); Git; ~45 GB free disk; 15–20 GB of downloads; 30–60 minutes. Clone
 into a short folder that OneDrive does not sync (the environments hold tens of thousands of files): keep the path
 under ~100 characters, because Windows cannot load some DLLs deep in the environments from a longer folder even with
@@ -349,22 +350,85 @@ Done. Next:  .\Start_OpenAmika.bat   (or double-click it: her voice server start
 
 ### 5.4 Her brain's LLM
 
-Either an OpenRouter key — the person pastes it in the first-run wizard on the Use page, or after
-`OPENROUTER_API_KEY=` in `brain/.env` (the brain also accepts it on Setup → Brain) — or fully local with Ollama.
+Her ears, voice, memory and eyes always run on the PC; the four LLM roles (§1) run one of two ways. Recommend the
+first: in almost all cases it is the better setup, and it costs a few dollars a month.
+
+- **Semi-Local (the default, recommended)**: the roles run on OpenRouter with the person's own key and the models
+  she was tested with (§4). The person pastes the key in the first-run wizard on the Use page, or after
+  `OPENROUTER_API_KEY=` in `brain/.env` (the brain also accepts it on Setup → Brain).
+- **Fully Local**: every role on Ollama, no key. Only with a model of **27B parameters or more**; **70B or more**
+  gives the full, reliable experience. A model under 27B may be really bad for her: it loses her character, forgets
+  what the person told her and breaks her output contract (the surface's four lines, the deep's
+  `[register_emotion]"…"` runs, the writer's JSON). Do not set the person up on one because it is what fits their
+  GPU: recommend Semi-Local, or Ollama on a second machine, instead.
+
 Check: `launch.py --check` shows `OK API keys …` or `-- API keys  no OpenRouter key yet …`.
 
-**Fully local.** Install Ollama (ollama.com), then `ollama pull qwen3:4b`: it fits next to her ears, memory and
-voice on a 12–16 GB card (on 16 GB only with her eyes off, `"vision": {"enabled": false}`); a 7–8B model needs a
-second GPU, or Ollama on another PC (its address goes in the detect call or on Setup → Brain). Then, on the page:
-Setup → Brain → Ollama → Detect models → Use this model. Headless, with her running (the speech gateway checks that
-`Origin` equals the address you call and that `X-Build-F-Action` names the action):
+**What Semi-Local costs, and how that was worked out.** The default preset (deep `z-ai/glm-5` without reasoning,
+surface and reflection `deepseek/deepseek-v4.1-flash`, memory_write `z-ai/glm-5.3`) cost $0.00165 per turn in
+MekaHime's own usage ledger: 172 turns of real conversation on 2026-11-02, all four roles counted, tools excluded.
+The heavier twelve-turn benchmark dialogues of October, on the same preset with its earlier GLM-5 writer, came to
+$0.037 each, $0.0031 a turn (the Alibaba preset's note in `config/llm_roles.json`). Steady voice chat is roughly 100
+turns an hour. Over a 30-day month: 30 turns a day (900) ≈ $1.50, or $2.80 at the benchmark rate; 100 turns a day,
+an hour of talking every day (3,000) ≈ $5, or $9.30; her reflection and the openings she starts herself when the
+person is quiet add about $0.005 a session. OpenRouter's prices change: the person's own figure is on the Use page,
+in the *Session cost* tile (`… / dialogue` is the average per turn).
+
+**Fully Local: which model, which card.** OpenAmika asks Ollama for a 16,384-token context (`num_ctx` in
+`config/ollama.json`; her prompts are ~8k tokens), so a loaded model takes its weights, plus the KV cache of that
+context (Ollama's default f16: 2 × layers × KV heads × head size × 2 bytes per token; Gemma 3 keeps the whole
+context only in 10 of its 62 layers, the other 52 hold a 1,024-token window), plus about 1 GB for the runner and its
+compute buffers (Ollama uses flash attention where the GPU supports it). Downloads as ollama.com lists them (checked
+2026-11-04); the other columns in the GB graphics cards are sold in (GiB):
+
+| model (Q4_K_M) | download | weights | KV cache at 16k | loaded | languages |
+|---|---|---|---|---|---|
+| `gemma3:27b` | 17 GB | 16.2 GB | 1.9 GB | **≈ 19 GB** | 140+, Chinese and Japanese among them |
+| `qwen3:32b` | 20 GB | 18.8 GB | 4.0 GB | **≈ 24 GB** | 100+, Chinese and Japanese among them |
+| `llama3.3:70b` | 43 GB | 39.6 GB | 5.0 GB | **≈ 46 GB** | eight per Meta, not Chinese or Japanese; her prompts are Chinese, so prefer `qwen2.5:72b` |
+| `qwen2.5:72b` | 47 GB | 44.2 GB | 5.0 GB | **≈ 50 GB** | 29+, Chinese and Japanese among them |
+
+Newer models of these sizes count the same way (for example `qwen3.6:27b`, an 18 GB download). What a model really
+takes: `ollama ps` while she talks (`SIZE` is the total, and `PROCESSOR` must read `100% GPU`). Give all four roles
+the same model: a second one must fit as well (both stay loaded for `keep_alive`, 30 min), or Ollama swaps them.
+
+Her own parts on the same card (measured on RTX 50-series cards): ears (SenseVoiceSmall + Silero VAD) ~1.2 GB,
+memory (bge-m3, fp16) ~1.4 GB, voice (GPT-SoVITS) ~2.5 GB, Windows and the browser ~1 GB: **~6 GB**; her eyes
+(Qwen3-VL-2B) add ~4.3 GB: **~10 GB**.
+
+| her GPU | a 27–32B model next to her | a 70B model next to her |
+|---|---|---|
+| 16 GB or less | no | no |
+| 24 GB (RTX 3090, 3090 Ti, 4090, 5090 Laptop, RTX PRO 4000) | no: ≈ 19 + 6 = 25 GB even with her eyes off | no |
+| 32 GB (RTX 5090, RTX PRO 4500) | `gemma3:27b` with all of her, eyes included (≈ 29.5 GB); `qwen3:32b` only with her eyes off (≈ 30 GB) | no |
+| 48 GB (RTX PRO 5000 48 GB, RTX 6000 Ada, RTX A6000) | either, with all of her (≤ 34 GB) | no: ≈ 46–50 GB for the model alone |
+| 72–96 GB (RTX PRO 5000 72 GB, RTX PRO 6000) | either | yes, with all of her (≤ 61 GB) |
+
+A model that does not fit still runs: Ollama puts the rest of it on the CPU (`ollama ps` shows a CPU/GPU split) and
+she becomes slow. When the person's GPU has no "yes" for the model they want:
+
+- **Semi-Local**: the answer in almost every case.
+- **Ollama on a second PC**, holding the model alone: 24 GB for `gemma3:27b`, 32 GB for `qwen3:32b`, 48 GB (only
+  just) for `llama3.3:70b`, 64 GB or more for `qwen2.5:72b` (two 32 GB cards, a 72–96 GB card, or a Mac with 96 GB
+  or more of unified memory). On that PC set the user environment variable `OLLAMA_HOST` to `0.0.0.0:11434`, quit
+  Ollama and start it again, and allow TCP port 11434 in its firewall (Ollama has no password: only on a network the
+  person trusts, or over Tailscale). Here: Setup → Brain → Ollama server `http://<that-pc>:11434` → Detect models
+  (or `base_url` in the detect call below).
+- **A second card in this PC**: give one card to Ollama alone (`CUDA_VISIBLE_DEVICES` set to its UUID from
+  `nvidia-smi -L`, in Ollama's environment) and keep her parts on the other. They all use CUDA device 0 by default;
+  when that is the card Ollama got, set `speech_device`, `embedder.device` and `vision.device` in `settings.json` to
+  `cuda:1` and add `--device cuda:1` to `services.tts.command`.
+
+To switch: `ollama pull gemma3:27b` (or the model chosen above), then on the page: Setup → Brain → Ollama → Detect
+models → Use this model. Headless, with her running (the speech gateway checks that `Origin` equals the address you
+call and that `X-Build-F-Action` names the action):
 
 ```powershell
 $page = "http://localhost:53000"                                   # chat_port
 Invoke-RestMethod -Method Post -Uri "$page/api/build_f/ollama/detect" -ContentType "application/json" `
   -Headers @{ Origin = $page; "X-Build-F-Action" = "ollama-detect" } -Body '{"base_url": "http://127.0.0.1:11434"}'
 Invoke-RestMethod -Method Post -Uri "$page/api/build_f/ollama/use" -ContentType "application/json" `
-  -Headers @{ Origin = $page; "X-Build-F-Action" = "ollama-use" } -Body '{"model": "qwen3:4b"}'
+  -Headers @{ Origin = $page; "X-Build-F-Action" = "ollama-use" } -Body '{"model": "gemma3:27b"}'
 ```
 
 - `detect` asks Ollama (`/api/version`, `/api/tags`, `/api/show` per model) and writes `config/ollama.json`
@@ -372,16 +436,17 @@ Invoke-RestMethod -Method Post -Uri "$page/api/build_f/ollama/use" -ContentType 
   "parameter_size", "quantization", "size_gb", "context_length", "thinking", "vision"}], "version", "detected_at"}`.
   `use` takes `{"model": …}` for all four roles, or `{"roles": {"surface": …, "deep": …, "reflection": …,
   "memory_write": …}}` (a role left out takes `model`), and writes the selections in `config/llm_roles.json`:
-  `"selections": {"<role>": "<role>:ollama:<model>"}`, for example `"deep": "deep:ollama:qwen3:4b"`.
+  `"selections": {"<role>": "<role>:ollama:<model>"}`, for example `"deep": "deep:ollama:gemma3:27b"`.
 - Refusals: no `Origin` (or the wrong one) → 403 `Use the OpenAmika page for this action.`; Ollama down → 503
-  `Ollama is not answering at http://127.0.0.1:11434 — is it running? …`; a model not detected → 400 `qwen3:4b is not
-  a detected Ollama model for the <role> role — detect models first.`; `use` while she speaks or writes memory → 409
-  `Wait for Amika to finish speaking, updating memory and applying service controls.` (power her off on the Use page,
-  retry).
+  `Ollama is not answering at http://127.0.0.1:11434 — is it running? …`; a model not detected → 400 `gemma3:27b is
+  not a detected Ollama model for the <role> role — detect models first.`; `use` while she speaks or writes memory
+  → 409 `Wait for Amika to finish speaking, updating memory and applying service controls.` (power her off on the Use
+  page, retry).
 - Check: `launch.py --check` then reads `OK API keys  no OpenRouter key, none needed: every role runs on Ollama …`,
-  `OK Ollama  <version> at http://127.0.0.1:11434` and `OK Ollama model qwen3:4b  pulled · surface, deep, reflection,
-  memory_write`, or `!! Ollama  not answering at … — start Ollama …` / `!! Ollama model qwen3:4b  not pulled — ollama
-  pull qwen3:4b (…)`.
+  `OK Ollama  <version> at http://127.0.0.1:11434` and `OK Ollama model gemma3:27b  pulled · surface, deep,
+  reflection, memory_write`, or `!! Ollama  not answering at … — start Ollama …` / `!! Ollama model gemma3:27b  not
+  pulled — ollama pull gemma3:27b (…)`. The pre-flight checks that the model is pulled, not its size: the 27B rule
+  and the memory table above are yours to apply.
 - Back to OpenRouter: Setup → Brain → OpenRouter → "Switch back to the OpenRouter preset".
 
 ### 5.5 Check, then start
@@ -510,9 +575,10 @@ Not installed by the setup; the core runs without them.
   the person turns it on, only harmless devices.
 - **Text her** ([docs/MESSENGERS.md](docs/MESSENGERS.md)): Discord (needs `pip install -r messengers\requirements.txt`
   in `envs/speech`) and Telegram bots, set on Setup → Text her; only allow-listed user ids reach her.
-- **Ollama**: §5.4. `qwen3:4b` fits next to her on a 12–16 GB card (on 16 GB with vision off); her ears, memory, eyes
-  and voice leave no room for a 7–8B model on 16 GB: use a second GPU, or run Ollama on another PC (Setup → Brain
-  takes its URL).
+- **Ollama** (Fully Local): §5.4. Only a model of 27B or more (70B or more for the full, reliable experience;
+  smaller ones break her character and her format). Next to her on one card, a 27B model needs a 32 GB GPU and a 70B
+  one 72–96 GB; otherwise Ollama on a second PC (Setup → Brain takes its URL), or, in almost every case the better
+  answer, Semi-Local.
 - **Phone**: `Tailscale_Serve_OpenAmika.bat` (needs Tailscale with MagicDNS + HTTPS); one conversation tab at a time.
 
 ## 9. Troubleshooting
@@ -580,6 +646,9 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
   `health`) of `settings.json`.
 - `-- API keys  no OpenRouter key yet …` → §5.4. `!! Ollama  not answering at …` → start Ollama (or fix its address
   on Setup → Brain); `!! Ollama model X  not pulled — ollama pull X …` → run that.
+- On Ollama she is slow → `ollama ps`: a CPU/GPU split under `PROCESSOR` instead of `100% GPU` means the model does
+  not fit next to her (the tables in §5.4). On Ollama she is out of character, forgets, or her lines come out broken
+  → the model is under 27B: §5.4.
 - `!! her clock  <python> has no time-zone database (the tzdata package), so the brain cannot start — …` → Windows
   has none of its own and the brain builds its zone at import: run the setup again, or `<python> -m pip install
   tzdata` (it is in `brain/requirements.txt`). `-- her clock  build_f.json timezone 'X' is not a time zone (…) — the

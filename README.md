@@ -38,8 +38,28 @@ in your city. She runs on your own PC, with OpenRouter or fully local with Ollam
 - [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick **Add python.exe to PATH** when you
   install it) and [Git](https://git-scm.com/download/win)
 - About 45 GB of free disk. Setting her up downloads about 15–20 GB and takes 30–60 minutes
-- An [OpenRouter](https://openrouter.ai) key (a few dollars of credit last a long time), or
-  [Ollama](https://ollama.com) to run her brain on your PC too
+- An [OpenRouter](https://openrouter.ai) key for her language model (recommended: a few dollars a month), or
+  [Ollama](https://ollama.com) with a model of 27B or more and a graphics card big enough for it (see
+  [Which language model?](#which-language-model))
+
+## Which language model?
+
+Her ears, voice, memory and eyes always run on your PC. Her language model, the part that thinks and writes her
+replies, runs one of two ways:
+
+- **Semi-Local (recommended)**: through [OpenRouter](https://openrouter.ai) on your own key. In almost all cases
+  this is the better choice: she uses the models she was tested with, answers fast, and it only costs a few dollars
+  a month (about $1.50 if you talk 30 turns a day, about $5 at 100 turns a day).
+- **Fully Local**: on your PC with [Ollama](https://ollama.com). Use a model of **27B parameters or more**; **70B or
+  more** gives the full, reliable experience. Models smaller than 27B may be really bad: she loses her character,
+  forgets what you told her and breaks her reply format.
+
+A local model needs its own video memory on top of the ~6 GB her ears, memory and voice use (~10 GB with her eyes):
+about 19 GB for a 27B model such as `gemma3:27b`, 24 GB for a 32B one such as `qwen3:32b`, and 46–50 GB for a 70B
+one (`llama3.3:70b`, `qwen2.5:72b`). So one 32 GB card (RTX 5090) holds a 27B model next to all of her (a 32B one
+only with her eyes off); a 24 GB card does not. A 70B model fits next to her only on a 72–96 GB workstation card.
+Otherwise run Ollama on a second PC (the Setup page takes its address), or stay Semi-Local. How to switch:
+[Optional add-ons](#optional-add-ons).
 
 ## Set her up
 
@@ -94,6 +114,8 @@ name, your city and your edits), then run the two setup commands again (they fet
 | `!! TTS (voice)  port 8002 answers but has no voice MekaHime_Amika` | Another voice server uses her port (OpenSakura's uses 8002 too). Stop it, or give her another port: change `8002` in `tts_url` and in `services.tts` (`--port`, `health`) in `settings.json`. |
 | She answers in text but you hear nothing | Give her voice about 20 seconds after a start, then click the page once. The health light must show TTS green. |
 | Her voice stutters or is very slow | Close other programs that use the graphics card, or turn her eyes off: `"vision": {"enabled": false}` in `settings.json`. |
+| On Ollama she is out of character, forgets things, or her replies come out broken | The model is too small. Use one of 27B or more (70B or more for the full experience), or go back to OpenRouter: Setup → Brain → OpenRouter → "Switch back to the OpenRouter preset". |
+| On Ollama she answers very slowly | The model does not fit in your video memory next to her (`ollama ps` shows a CPU/GPU split instead of `100% GPU`). See [Which language model?](#which-language-model). |
 
 Every part writes a log in `logs\`. For anything else, ask on [Discord](https://discord.gg/mekahime) or open an
 [issue](https://github.com/zeekk0/OpenAmika/issues). Using an AI coding agent? Point it at
@@ -101,10 +123,9 @@ Every part writes a log in `logs\`. For anything else, ask on [Discord](https://
 
 ## Optional add-ons
 
-- **Fully local**: install [Ollama](https://ollama.com), run `ollama pull qwen3:4b`, then on the Setup page choose
-  Brain → Ollama → Detect models → Use this model. No key needed. `qwen3:4b` fits next to her on a 12–16 GB card (on
-  16 GB, turn her eyes off: `"vision": {"enabled": false}` in `settings.json`); bigger models need a second GPU, or
-  Ollama on another PC (the Setup page takes its address).
+- **Fully Local**: install [Ollama](https://ollama.com), run `ollama pull gemma3:27b` (17 GB; or another model of
+  27B or more, see [Which language model?](#which-language-model)), then on the Setup page choose Brain → Ollama →
+  Detect models → Use this model. No key needed. For Ollama on another PC, type its address there before Detect models.
 - **Tools**: MCP servers and task agents she can use for you, on the Tools page ([docs/TOOLS.md](docs/TOOLS.md)).
 - **Smart home**: Zigbee plugs she can switch ([IoT/README.md](IoT/README.md)). It stays off until you read and
   accept the IoT safety statement ([docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)) on the Tools page. She runs on

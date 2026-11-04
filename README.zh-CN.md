@@ -34,7 +34,16 @@ Amika 是一个 Live2D 二次元少女：她能用语音和文字与你实时聊
 - Windows 10 或 11，以及一块 NVIDIA 显卡（RTX 20 系列或更新，显存 8 GB 以上；她的摄像头“眼睛”需要 16 GB），驱动保持较新
 - [Python 3.11](https://www.python.org/downloads/release/python-3119/)（安装时勾选 **Add python.exe to PATH**）和 [Git](https://git-scm.com/download/win)
 - 约 45 GB 可用磁盘空间。安装过程会下载约 15–20 GB，耗时 30–60 分钟
-- 一个 [OpenRouter](https://openrouter.ai) 密钥（充值几美元就能用很久）；如果想让她的大脑也在本机运行，可以用 [Ollama](https://ollama.com)
+- 一个给语言模型用的 [OpenRouter](https://openrouter.ai) 密钥（推荐，每月只需几美元）；或者 [Ollama](https://ollama.com)，外加一块跑得动 27B 及以上模型的显卡（见[用哪种语言模型？](#用哪种语言模型)）
+
+## 用哪种语言模型？
+
+她的耳朵、声音、记忆和眼睛始终运行在你的电脑上。负责思考、写出回复的那部分——语言模型——有两种运行方式：
+
+- **半本地（推荐）**：用你自己的密钥，通过 [OpenRouter](https://openrouter.ai) 运行。绝大多数情况下这都是更好的选择：用的是她经过测试的模型，回复也快，每月只要几美元（每天聊 30 轮约 1.5 美元，100 轮约 5 美元）。
+- **完全本地**：用 [Ollama](https://ollama.com) 在你的电脑上运行。请使用 **27B（270 亿参数）及以上** 的模型；想要完整、稳定的体验，请用 **70B 及以上**。小于 27B 的模型质量可能非常差：她会丢掉自己的性格、忘记你说过的话、把回复格式弄乱。
+
+本地模型除了她的耳朵、记忆和声音占用的约 6 GB 显存（开启眼睛时约 10 GB），还需要自己的一份显存：像 `gemma3:27b` 这样的 27B 模型约 19 GB，像 `qwen3:32b` 这样的 32B 模型约 24 GB，70B 模型（`llama3.3:70b`、`qwen2.5:72b`）约 46–50 GB。也就是说，一块 32 GB 显卡（RTX 5090）能同时装下 27B 模型和她的全部功能（32B 模型只有关掉她的眼睛才行），24 GB 显卡则装不下。70B 模型只有 72–96 GB 的工作站显卡才能和她放在同一块卡上。其他情况下，请在第二台电脑上运行 Ollama（Setup 页面可以填写它的地址），或者继续使用半本地方式。切换方法见[可选功能](#可选功能)。
 
 ## 安装
 
@@ -77,12 +86,14 @@ envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 她的声
 | `!! TTS (voice)  port 8002 answers but has no voice MekaHime_Amika` | 另一个语音服务器占用了她的端口（OpenSakura 的语音服务器也用 8002）。关掉它，或者给她换个端口：把 `settings.json` 里 `tts_url` 和 `services.tts`（`--port` 与 `health`）中的 `8002` 改成别的端口。 |
 | 她用文字回复，但听不到声音 | 启动后等大约 20 秒，再在页面上点击一次。指示灯里的 TTS 必须是绿色。 |
 | 她的声音断断续续或非常慢 | 关闭其他占用显卡的程序，或者在 `settings.json` 里设置 `"vision": {"enabled": false}` 关掉她的眼睛。 |
+| 用 Ollama 时她不像她自己、记不住事，或者回复格式乱了 | 模型太小了。请换用 27B 及以上的模型（想要完整、稳定的体验用 70B 及以上），或者切回 OpenRouter：Setup → Brain → OpenRouter → “Switch back to the OpenRouter preset”。 |
+| 用 Ollama 时她回复得非常慢 | 模型和她一起放不进显存（`ollama ps` 显示的是 CPU/GPU 比例，而不是 `100% GPU`）。见[用哪种语言模型？](#用哪种语言模型)。 |
 
 每个组件的日志都在 `logs\` 里。其他问题可以到 [Discord](https://discord.gg/mekahime) 提问，或提交 [issue](https://github.com/zeekk0/OpenAmika/issues)。如果你在用 AI 编程助手，请让它阅读 [README_IF_YOU_ARE_AI_AGENT.md](README_IF_YOU_ARE_AI_AGENT.md)。
 
 ## 可选功能
 
-- **完全本地运行**：安装 [Ollama](https://ollama.com)，运行 `ollama pull qwen3:4b`，然后在 Setup 页面选择 Brain → Ollama → Detect models → Use this model。不需要密钥。`qwen3:4b` 在 12–16 GB 显存的显卡上可以和她一起运行（16 GB 时请关掉她的眼睛：在 `settings.json` 里设置 `"vision": {"enabled": false}`）；更大的模型需要第二块 GPU，或在另一台电脑上运行的 Ollama（Setup 页面可以填写它的地址）。
+- **完全本地运行**：安装 [Ollama](https://ollama.com)，运行 `ollama pull gemma3:27b`（17 GB；也可以用其他 27B 及以上的模型，见[用哪种语言模型？](#用哪种语言模型)），然后在 Setup 页面选择 Brain → Ollama → Detect models → Use this model。不需要密钥。如果 Ollama 运行在另一台电脑上，请在按 Detect models 之前先填写它的地址。
 - **工具**：她可以替你使用的 MCP 服务器和任务代理，在 Tools 页面设置（[docs/TOOLS.md](docs/TOOLS.md)）。
 - **智能家居**：她可以开关的 Zigbee 插座（[IoT/README.md](IoT/README.md)）。在你于 Tools 页面阅读并接受 IoT 安全声明（[docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)）之前，它始终关闭。她运行在大语言模型之上，可能出错：绝对不要连接取暖器、门锁、阀门或任何可能造成危险的设备。
 - **用文字找她**：通过 Discord 或 Telegram（[docs/MESSENGERS.md](docs/MESSENGERS.md)）。
