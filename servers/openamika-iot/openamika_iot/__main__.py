@@ -1,9 +1,13 @@
 """openamika-iot — a small first-party MCP server wrapping mosquitto + zigbee2mqtt.
 
-Run (stdio, what OpenAmika's tools.json spawns):
+Run (stdio, what OpenAmika's tools.json spawns once the IoT safety statement was accepted on the Tools page):
     python -m openamika_iot
 Run as a network server (when the Zigbee dongle lives on another machine):
-    python -m openamika_iot --http --host 0.0.0.0 --port 8010
+    python -m openamika_iot --http --host 0.0.0.0 --port 8010 --accept-iot-disclaimer 2026-11-03
+
+It refuses to start until OpenAmika's IoT safety statement (docs/IOT_DISCLAIMER.md) has been accepted: the brain
+passes the accepted version in OPENAMIKA_IOT_DISCLAIMER_ACCEPTED, by hand you pass --accept-iot-disclaimer
+(see disclaimer.py).
 
 Requires: pip install mcp paho-mqtt     (see pyproject.toml)
 """
@@ -13,16 +17,20 @@ import argparse
 import json
 import sys
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError:  # newer SDK naming
-    try:
-        from mcp import MCPServer as FastMCP  # type: ignore
-    except ImportError:
-        print("The 'mcp' package is required: pip install mcp", file=sys.stderr)
-        raise SystemExit(1)
+from .disclaimer import IOT_DISCLAIMER_VERSION, refusal
 
-from .bridge import BRIDGE, DeviceNotFound
+
+def _fastmcp():
+    """The MCP server class, imported only after the safety check (a refusal needs no packages)."""
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ImportError:  # newer SDK naming
+        try:
+            from mcp import MCPServer as FastMCP  # type: ignore
+        except ImportError:
+            print("The 'mcp' package is required: pip install mcp", file=sys.stderr)
+            raise SystemExit(1)
+    return FastMCP
 
 
 def _json(doc) -> str:
@@ -30,6 +38,8 @@ def _json(doc) -> str:
 
 
 def build_server(host: str = "127.0.0.1", port: int = 8010):
+    FastMCP = _fastmcp()
+    from .bridge import BRIDGE, DeviceNotFound
     try:
         mcp = FastMCP("openamika-iot", host=host, port=port)
     except TypeError:
@@ -127,8 +137,17 @@ def main():
                         help="serve Streamable HTTP instead of stdio (for a remote dongle host)")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--accept-iot-disclaimer", metavar="VERSION", default=None,
+                        help="confirm that you have read and accept OpenAmika's IoT safety statement "
+                             f"(docs/IOT_DISCLAIMER.md, current version {IOT_DISCLAIMER_VERSION}); OpenAmika passes "
+                             "it for you once it was accepted on the Tools page")
     args = parser.parse_args()
+    problem = refusal(args.accept_iot_disclaimer)
+    if problem:
+        print(problem, file=sys.stderr)
+        raise SystemExit(2)
 
+    from .bridge import BRIDGE
     BRIDGE.start()
     mcp = build_server(args.host, args.port)
     if args.http:

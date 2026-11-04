@@ -61,6 +61,6 @@ if ($svc) {
 }
 
 Write-Host ""
-Write-Host "Done. Back in OpenAmika: run Start_OpenAmika.bat — the launcher finds the COM port, starts the broker and zigbee2mqtt, and your Zigbee devices should appear." -ForegroundColor Cyan
+Write-Host "Done. Back in OpenAmika: run Start_OpenAmika.bat, then turn IoT on from the Tools page. It shows the IoT safety statement (docs\IOT_DISCLAIMER.md) first; once you accept it, the launcher finds the COM port, starts the broker and zigbee2mqtt, and your Zigbee devices should appear." -ForegroundColor Cyan
 Stop-Transcript | Out-Null
 Read-Host "Press Enter to close"

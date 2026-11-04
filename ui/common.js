@@ -92,12 +92,23 @@
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), isError ? 6000 : 3200);
   }
 
+  // a refusal's detail is a sentence, or {code, message} when the page should react to it (e.g. the IoT safety
+  // statement: code "iot_disclaimer_required"); the Error carries .status and .code either way
+  function refusal(payload, status, fallback) {
+    const detail = payload && payload.detail;
+    const structured = detail && typeof detail === "object";
+    const error = new Error((structured ? detail.message : detail) || (payload && payload.error) || fallback);
+    error.status = status;
+    error.code = (structured && detail.code) || (payload && payload.code) || null;
+    return error;
+  }
+
   async function getJSON(url) {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) {
-      let detail = "";
-      try { detail = (await response.json()).detail || ""; } catch (_) {}
-      throw new Error(detail || `${url} → HTTP ${response.status}`);
+      let payload = null;
+      try { payload = await response.json(); } catch (_) {}
+      throw refusal(payload, response.status, `${url} → HTTP ${response.status}`);
     }
     return response.json();
   }
@@ -110,10 +121,7 @@
     });
     let payload = null;
     try { payload = await response.json(); } catch (_) {}
-    if (!response.ok) {
-      const msg = (payload && (payload.detail || payload.error)) || `HTTP ${response.status}`;
-      throw new Error(msg);
-    }
+    if (!response.ok) throw refusal(payload, response.status, `HTTP ${response.status}`);
     return payload;
   }
 

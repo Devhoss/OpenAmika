@@ -69,12 +69,44 @@ agreed) · **confirm** (parks as *pending*; you approve on the Tools page, it ru
   `NANOMUSE_TOKEN_FILE = <data_dir>/server_token`.
 - **Smart home** — `servers/openamika-iot/`, an MCP wrapper around mosquitto + zigbee2mqtt (ported
   from the Amika_IoT bridge): `list_devices`, `get_state`, `set_state`, `set_nickname`,
-  `activate_scene`, `health`. Routed like any plain server; see its README.
-- **Home Assistant** — its MCP Server integration URL + a long-lived token.
+  `activate_scene`, `health`. Routed like any plain server; see its README. Needs the accepted IoT
+  safety statement (below).
+- **Home Assistant** — its MCP Server integration URL + a long-lived token. Counts as IoT too.
 - **OpenClaw** — `openclaw mcp serve` exposes channel conversations (read/send messages), not its
   toolset; add it as a plain server if that is what you want.
 
 Details and the bridge's environment variables: `servers/openamika-agents/README.md`.
+
+## Safety and responsibility (IoT)
+
+Smart-home servers give her hands in the physical world, so they come with a statement you must
+read and accept first: [`docs/IOT_DISCLAIMER.md`](IOT_DISCLAIMER.md) (English, 日本語, 简体中文). In
+short: she runs on non-deterministic language models; she can mishear, misunderstand, act on the
+wrong device or at the wrong time, repeat or skip an action, or be manipulated by what she reads or
+hears (prompt injection); models, providers, networks, bridges, Zigbee/MQTT and firmware can fail.
+There is no guarantee that she will not cause harm to your devices, property, data, people or
+animals. Everything you connect is at your own risk, and MekaHime Inc. and the contributors are not
+responsible for any outcome, damage, loss or injury, to the maximum extent the law allows (the
+software is provided as is, MIT License). Never connect anything that could cause danger if misused
+or abused (heaters and other heating appliances, valves and pumps, locks, garage doors and gates,
+alarms, medical, child- or pet-safety equipment, vehicles, machinery, high-power loads). The quote
+check, the policies and the `confirm` step are best-effort, never a guarantee; keep manual, physical
+control of every device, and turn IoT off at any time on the Tools page.
+
+How it is enforced: a smart-home server is the `openamika-iot` bridge (named `iot` or started as
+`openamika_iot`), Home Assistant's MCP server (recognised by its name or its URL), or any entry with
+`"kind": "iot"`. Turning one on from the Tools page shows the statement in a dialog: an unticked
+"I have read and accept this" box and a separate **Enable IoT** button; Cancel leaves IoT off. The
+acceptance is stored in `config/tools.json` as `"iot_disclaimer": {"version", "accepted_at"}` (only
+`POST /api/build_f/iot/disclaimer` writes it; a config save keeps what is on disk). Until the current
+version is accepted, the gateway and the brain refuse a config that switches a smart-home server on
+(409, `iot_disclaimer_required`), the brain's MCP hub refuses to start, connect or call one on every
+path (her turns, the health loop, the Smart home panel, Test, approvals), the launcher holds
+mosquitto and zigbee2mqtt back (and starts them as soon as you accept), and the bridge itself
+refuses to start without the accepted version (`OPENAMIKA_IOT_DISCLAIMER_ACCEPTED`, set by the
+brain, or `--accept-iot-disclaimer <version>` when you run it yourself). An install that already had
+IoT on keeps it off, and the Tools page says why; when the statement changes, its version
+(`IOT_DISCLAIMER_VERSION` in `brain/iot_disclaimer.py`) changes, and the dialog asks again.
 
 ## Health & open turns
 

@@ -42,6 +42,11 @@ Design (docs/TOOLS.md):
   * Honesty guard: the clerk also flags a concrete result she attributed to a helper that has not reported
     one ("fabricated"); the brain tells her at once to take it back, and a late real result tells her to
     correct herself.
+  * IoT needs the accepted IoT safety statement (docs/IOT_DISCLAIMER.md; version and rules in
+    iot_disclaimer.py). A smart-home server (the openamika-iot bridge, Home Assistant's MCP server, any
+    "kind": "iot") is never started or connected before the current version was accepted on the Tools
+    page: the hub refuses it on every path, a config that switches one on is refused (409), and a new
+    version holds IoT off again until it is accepted.
   * Everything here is fail-quiet: a broken config, a dead MCP server or a missing `mcp`
     package must never break a conversation turn.
 
@@ -75,7 +80,20 @@ import uuid
 from collections import deque
 from pathlib import Path
 
+import iot_disclaimer
+
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "tools.json"
+IOT_BLOCKED = "iot_disclaimer"    # why a smart-home server is held off: the IoT safety statement was not accepted
+
+
+class IotNotAccepted(RuntimeError):
+    """A smart-home server may not start or stay connected: the current IoT safety statement was not accepted."""
+
+
+def iot_held(name: str, scfg, cfg=None) -> bool:
+    """True when `name` is a smart-home server (the IoT bridge, Home Assistant, any "kind": "iot") and the current IoT
+    safety statement (docs/IOT_DISCLAIMER.md, brain/iot_disclaimer.py) is not accepted in config/tools.json."""
+    return iot_disclaimer.is_smart_home(name, scfg) and not iot_disclaimer.accepted(_config() if cfg is None else cfg)
 
 _AUTO_PREFIXES = ("list_", "get_", "read_", "search_", "query_", "health", "status", "describe_")
 AGENT_TOOLS = frozenset({"ask", "status", "answer", "stop"})
@@ -344,8 +362,7 @@ class _Hub:
             else:
                 if not cfg.get("command"):
                     raise RuntimeError("server needs a command (stdio) or url (http)")
-                env = {**os.environ, "PYTHONIOENCODING": "utf-8",
-                       **{str(k): str(v) for k, v in (cfg.get("env") or {}).items()}}
+                env = _server_env(name, cfg)
                 kwargs = dict(command=self._command(cfg), args=list(cfg.get("args") or []), env=env)
                 cwd = self._cwd(cfg)
                 if cwd:
@@ -396,8 +413,24 @@ class _Hub:
                 texts.append(text)
         return ("\n".join(texts).strip() or "(no text result)"), bool(getattr(result, "isError", False))
 
+    def _require_consent(self, name, cfg):
+        """No smart-home server starts, connects or stays connected before the current IoT safety statement was
+        accepted (docs/IOT_DISCLAIMER.md). Every way to a device comes through here: her turns, the health loop,
+        the Smart home panel, Test, approvals and the reconnect in call()."""
+        if not iot_held(name, cfg):
+            return
+        if name in self._sessions:
+            self.disconnect(name)
+        self.tools.pop(name, None)
+        _HEALTH.pop(name, None)                 # no "online" left over from before, and no device list for her
+        _IOT_SNAPSHOT.pop(name, None)
+        self.status[name] = {"connected": False, "error": iot_disclaimer.REQUIRED_MESSAGE, "at": time.time(),
+                             "blocked": IOT_BLOCKED}
+        raise IotNotAccepted(iot_disclaimer.REQUIRED_MESSAGE)
+
     # thread-safe API
     def connect(self, name, cfg, timeout=25):
+        self._require_consent(name, cfg)
         try:
             return self._run(self._connect_async(name, cfg), timeout)
         except BaseException as error:  # includes concurrent.futures.TimeoutError
@@ -412,11 +445,13 @@ class _Hub:
             pass
 
     def ensure_connected(self, name, cfg):
+        self._require_consent(name, cfg)
         if name in self._sessions and self.status.get(name, {}).get("connected"):
             return self.tools.get(name, [])
         return self.connect(name, cfg)
 
     def call(self, name, tool, arguments, timeout):
+        self._require_consent(name, (_config().get("mcpServers") or {}).get(name) or {})
         try:
             return self._run(self._call_async(name, tool, arguments, timeout), timeout + 5)
         except BaseException as error:
@@ -432,9 +467,23 @@ class _Hub:
 HUB = _Hub()
 
 
+def _server_env(name: str, cfg: dict) -> dict:
+    """The environment a stdio server starts with: the brain's, then the entry's own `env`. A smart-home server also
+    gets the IoT safety statement version accepted in config/tools.json (the bridge refuses to start without it);
+    no other server, and no inherited or hand-written value, carries that variable."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", **{str(k): str(v) for k, v in (cfg.get("env") or {}).items()}}
+    env.pop(iot_disclaimer.ENV_VAR, None)
+    if iot_disclaimer.is_smart_home(name, cfg):
+        version = (iot_disclaimer.acceptance(_config()) or {}).get("version")
+        if version:
+            env[iot_disclaimer.ENV_VAR] = version
+    return env
+
+
 def _active_tools(cfg):
     """[(server, server_cfg, tool_dict, policy)] for enabled servers, policy != deny.
-    A server that fails to connect is left alone for 60 s so a dead server cannot slow every turn."""
+    A server that fails to connect is left alone for 60 s so a dead server cannot slow every turn.
+    A smart-home server held off by the IoT safety statement is simply left out (the hub refuses it)."""
     out = []
     now = time.monotonic()
     for name, scfg in (cfg.get("mcpServers") or {}).items():
@@ -445,6 +494,8 @@ def _active_tools(cfg):
         try:
             tools = HUB.ensure_connected(name, scfg)
             _connect_fail_until.pop(name, None)
+        except IotNotAccepted:
+            continue
         except Exception as error:
             _connect_fail_until[name] = now + 60
             print(f"[tools] {name}: connect failed: {error}")
@@ -549,9 +600,10 @@ def start_agent(name: str, scfg: dict, *, force: bool = False):
     """Launch the agent's own process (config `autostart`) detached from the brain, so it outlives a brain
     restart. Throttled: at most _AUTOSTART_MAX_ATTEMPTS per enable cycle, _AUTOSTART_MIN_GAP apart, never
     while a launch is still within its grace period — unless force (the Start button, which also resets
-    the budget). Returns the attempt record, or None when nothing was launched."""
+    the budget). Returns the attempt record, or None when nothing was launched (also for a smart-home server
+    held off by the IoT safety statement)."""
     cfg = autostart_config(scfg)
-    if cfg is None:
+    if cfg is None or iot_held(name, scfg):
         return None
     now = time.time()
     rec = _AUTOSTART.get(name) or {"attempts": 0, "last": 0.0, "proc": None, "cmd": "", "started_at": 0.0, "error": None}
@@ -619,8 +671,8 @@ def _ensure_health_thread():
 
 def is_iot_server(name: str, scfg: dict | None) -> bool:
     """The smart-home server (servers/openamika-iot): its devices are listed for her and its switch results are
-    relayed to her word for word."""
-    return name == "iot" or "openamika_iot" in json.dumps((scfg or {}).get("args") or [])
+    relayed to her word for word. (Which servers need the IoT safety statement is wider: iot_disclaimer.is_smart_home.)"""
+    return iot_disclaimer.is_iot_bridge(name, scfg)
 
 
 def refresh_iot_snapshot(name: str, devices=None):
@@ -1629,25 +1681,31 @@ def _status_payload():
         discovered = HUB.tools.get(name, [])
         tools = [{"name": tool["name"], "description": tool.get("description") or "",
                   "policy": resolve_policy(scfg, tool["name"], discovered)} for tool in discovered]
+        # a smart-home server held off by the IoT safety statement is off, whatever an older session or probe said
+        blocked = IOT_BLOCKED if scfg.get("enabled") and iot_held(name, scfg, cfg) else None
         servers[name] = {
             "transport": "http" if scfg.get("url") else "stdio",
             "target": scfg.get("url") or " ".join([str(scfg.get("command") or "")] + [str(a) for a in (scfg.get("args") or [])]),
             "enabled": bool(scfg.get("enabled")),
-            "connected": bool(HUB.status.get(name, {}).get("connected")),
-            "error": HUB.status.get(name, {}).get("error"),
-            "health": _HEALTH.get(name),          # agent servers only: {ok, reason, detail, version, at}
+            "connected": False if blocked else bool(HUB.status.get(name, {}).get("connected")),
+            "error": iot_disclaimer.REQUIRED_MESSAGE if blocked else HUB.status.get(name, {}).get("error"),
+            "health": None if blocked else _HEALTH.get(name),   # agent servers only: {ok, reason, detail, version, at}
             "autostart": ({k: v for k, v in autostart_config(scfg).items() if k != "env"}
                           if autostart_config(scfg) else None),
             "kind": "agent" if is_agent_server(scfg, discovered) else "mcp",
             "persona_note": str(scfg.get("persona_note") or ""),
             "tools": tools,
             "policies": scfg.get("tools") or {},
+            # smart-home servers need the accepted IoT safety statement; "blocked" = switched on but held off for it
+            "iot": iot_disclaimer.is_smart_home(name, scfg),
+            "blocked": blocked,
         }
     jobs = sorted((_public_job(j) for j in _JOBS.values()), key=lambda j: j["started"] or 0)
     # "config" is the raw tools.json: the page's raw editor and every save are built from it, so the
     # fields the cards do not show (env, cwd, headers) survive a click on the page.
     return {"ok": True, "enabled": bool(cfg.get("enabled")), "clerk_role": cfg.get("clerk_role") or "surface",
             "limits": cfg.get("limits") or {}, "servers": servers, "config": cfg,
+            "iot_disclaimer": iot_disclaimer.status(cfg),
             "dialogue": list(_DIALOGUE)[-80:],
             "pending": sorted(_PENDING.values(), key=lambda p: p["ts"]),
             "jobs": jobs[-20:], "relay_queue": len(_RELAY_QUEUE), "log": list(_LOG)[-50:]}
@@ -1704,7 +1762,7 @@ def install_tools(g):
                             entry["env"] = {str(k): str(v) for k, v in scfg["env"].items()}
                         if scfg.get("cwd"):
                             entry["cwd"] = str(scfg["cwd"])
-                    if scfg.get("kind") in ("agent", "mcp"):
+                    if scfg.get("kind") in ("agent", "mcp", "iot"):
                         entry["kind"] = scfg["kind"]
                     auto = scfg.get("autostart")
                     if isinstance(auto, dict) and str(auto.get("command") or "").strip():
@@ -1723,6 +1781,14 @@ def install_tools(g):
                     if isinstance(policies, dict):
                         entry["tools"] = {str(k): v for k, v in policies.items() if v in ("auto", "confirm", "deny")}
                     clean["mcpServers"][name] = entry
+            # IoT turns on only after the IoT safety statement was accepted (POST /api/build_f/iot/disclaimer); the
+            # acceptance on disk is kept as it is, whatever the posted document says about it
+            current = _config()
+            if iot_disclaimer.turns_on_iot(clean) and not iot_disclaimer.accepted(current):
+                return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE,
+                                "error": iot_disclaimer.REQUIRED_MESSAGE}), 409
+            if iot_disclaimer.acceptance(current):
+                clean[iot_disclaimer.RECORD_KEY] = iot_disclaimer.acceptance(current)
             _save_config(clean)
             # drop connections of servers that were removed or disabled
             for name in list(HUB.status):
@@ -1761,6 +1827,8 @@ def install_tools(g):
             return jsonify({"ok": False, "error": str(error)}), 403
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        except IotNotAccepted as error:
+            return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE, "error": str(error)}), 409
         except RuntimeError as error:
             return jsonify({"ok": False, "error": str(error)}), 502
 
@@ -1784,14 +1852,41 @@ def install_tools(g):
             return jsonify({"ok": False, "error": str(error)}), 403
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        except IotNotAccepted as error:
+            return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE, "error": str(error)}), 409
         except RuntimeError as error:
             return jsonify({"ok": False, "error": str(error)}), 502
+
+    @app.route("/api/build_f/iot/disclaimer", methods=["POST"])
+    def iot_disclaimer_accept():
+        """Record that the person read and accepted the current IoT safety statement ({accept: true, version}): the
+        Tools page sends it from the statement's dialog, after its "I have read and accept this" box was ticked.
+        Only this route writes the acceptance; a config save keeps whatever is on disk."""
+        try:
+            value = action_request("iot-disclaimer")
+            if value.get("accept") is not True:
+                raise ValueError("Tick “I have read and accept this” first.")
+            if value.get("version") != iot_disclaimer.IOT_DISCLAIMER_VERSION:
+                raise ValueError(f"That is not the current IoT safety statement (version "
+                                 f"{iot_disclaimer.IOT_DISCLAIMER_VERSION}); reload the Tools page and read it again.")
+            doc = json.loads(json.dumps(_config()))
+            doc[iot_disclaimer.RECORD_KEY] = iot_disclaimer.record()
+            _save_config(doc)
+            _connect_fail_until.clear()
+            _kick_health()
+            print(f"[tools] IoT safety statement {iot_disclaimer.IOT_DISCLAIMER_VERSION} accepted "
+                  f"({doc[iot_disclaimer.RECORD_KEY]['accepted_at']})")
+            return jsonify({"ok": True, "iot_disclaimer": iot_disclaimer.status(doc)})
+        except PermissionError as error:
+            return jsonify({"ok": False, "error": str(error)}), 403
+        except ValueError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
 
     # ── the Smart home panel: devices, readings, naming, manual switching, pairing (servers/openamika-iot) ──
     def _iot_server():
         cfg = _config()
         for name, scfg in (cfg.get("mcpServers") or {}).items():
-            if isinstance(scfg, dict) and scfg.get("enabled") and (name == "iot" or "openamika_iot" in json.dumps(scfg.get("args") or [])):
+            if isinstance(scfg, dict) and scfg.get("enabled") and is_iot_server(name, scfg):
                 return name, scfg
         return None, None
 
@@ -1808,8 +1903,20 @@ def install_tools(g):
         """Everything the Smart home panel shows: the server's health, every device with its nickname, note,
         state, readings and availability, and the pairing/discovery state."""
         name, scfg = _iot_server()
+        consent = iot_disclaimer.status(_config())
         if not name:
-            return jsonify({"ok": True, "enabled": False, "devices": [], "discovery": None, "health": None})
+            return jsonify({"ok": True, "enabled": False, "devices": [], "discovery": None, "health": None,
+                            "iot_disclaimer": consent})
+        if iot_held(name, scfg):
+            # switched on but held off until the IoT safety statement is accepted: nothing is started or asked, and a
+            # session left from before (the acceptance withdrawn while running) is dropped by the hub's gate
+            try:
+                HUB.ensure_connected(name, scfg)
+            except Exception:
+                pass
+            return jsonify({"ok": True, "enabled": True, "connected": False, "server": name, "devices": [],
+                            "discovery": None, "health": None, "blocked": IOT_BLOCKED, "iot_disclaimer": consent,
+                            "error": iot_disclaimer.REQUIRED_MESSAGE})
         try:
             devices = _iot_call(name, scfg, "list_devices")
             refresh_iot_snapshot(name, devices)          # her device list stays as fresh as the panel's
@@ -1817,12 +1924,13 @@ def install_tools(g):
             health = probe_health(name, scfg)
         except Exception as error:
             return jsonify({"ok": True, "enabled": True, "connected": False, "server": name, "devices": [], "discovery": None,
-                            "health": _HEALTH.get(name), "error": f"{type(error).__name__}: {str(error)[:200]}"})
+                            "health": _HEALTH.get(name), "iot_disclaimer": consent,
+                            "error": f"{type(error).__name__}: {str(error)[:200]}"})
         listing = [{"friendly_name": fname, **(info if isinstance(info, dict) else {})}
                    for fname, info in devices.items() if not str(fname).startswith(("ok", "error"))]
         listing.sort(key=lambda d: ((d.get("nickname") or d["friendly_name"]).lower()))
         return jsonify({"ok": True, "enabled": True, "connected": True, "server": name, "health": health,
-                        "devices": listing, "discovery": discovery})
+                        "devices": listing, "discovery": discovery, "iot_disclaimer": consent})
 
     @app.route("/api/build_f/iot/device", methods=["POST"])
     def iot_device():
@@ -1832,6 +1940,8 @@ def install_tools(g):
             name, scfg = _iot_server()
             if not name:
                 raise ValueError("No smart-home server is enabled.")
+            if iot_held(name, scfg):
+                raise IotNotAccepted(iot_disclaimer.REQUIRED_MESSAGE)
             device = str(value.get("device") or "").strip()
             if not device:
                 raise ValueError("Which device?")
@@ -1858,6 +1968,8 @@ def install_tools(g):
             return jsonify({"ok": False, "error": str(error)}), 403
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        except IotNotAccepted as error:
+            return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE, "error": str(error)}), 409
         except Exception as error:
             return jsonify({"ok": False, "error": f"{type(error).__name__}: {str(error)[:200]}"}), 502
 
@@ -1869,6 +1981,8 @@ def install_tools(g):
             name, scfg = _iot_server()
             if not name:
                 raise ValueError("No smart-home server is enabled.")
+            if iot_held(name, scfg):
+                raise IotNotAccepted(iot_disclaimer.REQUIRED_MESSAGE)
             seconds = int(value.get("seconds") or 254) if value.get("enable", True) else 0
             result = _iot_call(name, scfg, "permit_join", {"seconds": seconds})
             discovery = _iot_call(name, scfg, "discovery")
@@ -1877,6 +1991,8 @@ def install_tools(g):
             return jsonify({"ok": False, "error": str(error)}), 403
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        except IotNotAccepted as error:
+            return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE, "error": str(error)}), 409
         except Exception as error:
             return jsonify({"ok": False, "error": f"{type(error).__name__}: {str(error)[:200]}"}), 502
 
@@ -1901,6 +2017,9 @@ def install_tools(g):
                 raise ValueError("Unknown or already-handled pending call.")
             cfg = _config()
             scfg = (cfg.get("mcpServers") or {}).get(entry["server"]) or {}
+            if iot_held(entry["server"], scfg, cfg):
+                _PENDING[pid] = entry          # it keeps waiting: it can run once the IoT safety statement is accepted
+                raise IotNotAccepted(iot_disclaimer.REQUIRED_MESSAGE)
             HUB.ensure_connected(entry["server"], scfg)
             text, is_error = HUB.call(entry["server"], entry["tool"], entry["arguments"], _limits()["call_timeout"])
             snip = text if len(text) <= 500 else text[:500] + "…"
@@ -1915,6 +2034,8 @@ def install_tools(g):
             return jsonify({"ok": False, "error": str(error)}), 403
         except ValueError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        except IotNotAccepted as error:
+            return jsonify({"ok": False, "code": iot_disclaimer.REQUIRED_CODE, "error": str(error)}), 409
         except RuntimeError as error:
             return jsonify({"ok": False, "error": str(error)}), 502
 
@@ -1957,3 +2078,7 @@ def install_tools(g):
     _ensure_health_thread()
     print("[tools] MCP tool layer installed "
           f"(config: {CONFIG_PATH.name}, enabled={_config().get('enabled')}, clerk_role={_config().get('clerk_role')})")
+    held = iot_disclaimer.status(_config())["held"]
+    if held:
+        print(f"[tools] smart home held off ({', '.join(held)}): the IoT safety statement "
+              f"{iot_disclaimer.IOT_DISCLAIMER_VERSION} has not been accepted (Tools page)")

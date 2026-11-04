@@ -89,14 +89,170 @@
     return base;
   }
 
+  // ── the IoT safety statement (docs/IOT_DISCLAIMER.md): IoT turns on only after it was read and accepted ──
+  // The brain and the gateway refuse a config that switches a smart-home server on before that (409, code
+  // iot_disclaimer_required); this page asks first, and answers such a refusal with the same dialog.
+  const consent = { doc: null, resolve: null, promise: null, mode: null, autoShown: false };
+
+  function iotAccepted() { return !!(state && state.iot_disclaimer && state.iot_disclaimer.accepted); }
+  function isSmartHome(name) { return !!(state && state.servers && state.servers[name] && state.servers[name].iot); }
+  function turnsOnIot(cfg) {
+    return Object.entries((cfg && cfg.mcpServers) || {}).some(([name, entry]) => entry && entry.enabled && isSmartHome(name));
+  }
+
+  function inlineText(text) {               // the statement's **bold**; everything else stays plain text
+    const frag = document.createDocumentFragment();
+    String(text || "").split("**").forEach((part, i) => {
+      if (part) frag.append(i % 2 ? el("strong", { text: part }) : document.createTextNode(part));
+    });
+    return frag;
+  }
+
+  function showStatement(lang) {
+    const languages = (consent.doc && consent.doc.statement && consent.doc.statement.languages) || {};
+    const section = languages[lang] || languages.en;
+    if (!section) return;
+    const box = $("iotConsentText");
+    box.replaceChildren(...section.blocks.map((block) =>
+      block.type === "h" ? el("h4", {}, inlineText(block.text))
+        : block.type === "ul" ? el("ul", {}, ...block.items.map((item) => el("li", {}, inlineText(item))))
+          : el("p", {}, inlineText(block.text))));
+    box.setAttribute("lang", lang === "zh" ? "zh-CN" : languages[lang] ? lang : "en");
+    box.scrollTop = 0;
+    document.querySelectorAll(".oa-consent-lang").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  }
+
+  // mode "accept": resolves true once the person ticked the box, pressed Enable IoT and the acceptance was recorded;
+  // false on Cancel / Escape (IoT stays off); null when the statement could not even be loaded (already said so).
+  // mode "view": the statement with a Close button.
+  async function openConsent(mode) {
+    const dialog = $("iotConsent");
+    if (dialog.open) return mode !== "view" && consent.mode === "accept" ? consent.promise : false;
+    try { consent.doc = await getJSON("/api/build_f/iot/disclaimer"); }
+    catch (error) {
+      toast("The IoT safety statement could not be loaded, so IoT stays off: " + (error.message || error), true);
+      return null;
+    }
+    if (dialog.open) return false;
+    const doc = consent.doc, accepting = mode !== "view";
+    consent.mode = accepting ? "accept" : "view";
+    $("iotConsentVersion").textContent = "Version " + doc.version;
+    $("iotConsentLead").textContent = accepting
+      ? "Before Amika can reach anything in your home, read this statement in full. IoT stays off unless you accept it."
+      : doc.accepted ? "You accepted this version" + (doc.accepted_at ? " on " + new Date(doc.accepted_at).toLocaleString() : "") + "."
+        : "IoT stays off until you accept this statement; turning IoT on asks for it.";
+    const changed = $("iotConsentChanged");
+    changed.hidden = !(accepting && doc.accepted_version && doc.accepted_version !== doc.version);
+    changed.textContent = "This statement changed since you accepted version " + doc.accepted_version
+      + ". IoT stays off until you read and accept the new version.";
+    $("iotConsentAccept").hidden = !accepting;
+    $("iotConsentEnable").hidden = !accepting;
+    $("iotConsentCancel").textContent = accepting ? "Cancel" : "Close";
+    $("iotConsentCheck").checked = false;
+    $("iotConsentEnable").disabled = true;
+    $("iotConsentError").hidden = true;
+    showStatement("en");
+    dialog.showModal();
+    $("iotConsentText").focus();
+    consent.promise = new Promise((resolve) => { consent.resolve = resolve; });
+    return consent.promise;
+  }
+
+  function closeConsent(result) {
+    const resolve = consent.resolve;
+    consent.resolve = null;
+    consent.promise = null;
+    consent.mode = null;
+    if ($("iotConsent").open) $("iotConsent").close();
+    if (resolve) resolve(result);
+  }
+
+  $("iotConsentCheck").addEventListener("change", () => { $("iotConsentEnable").disabled = !$("iotConsentCheck").checked; });
+  $("iotConsentCancel").addEventListener("click", () => closeConsent(false));
+  $("iotConsent").addEventListener("cancel", (event) => { event.preventDefault(); closeConsent(false); });   // Escape
+  $("iotConsent").addEventListener("close", () => { if (consent.resolve) closeConsent(false); });
+  document.querySelectorAll(".oa-consent-lang").forEach((b) => b.addEventListener("click", () => showStatement(b.dataset.lang)));
+  $("iotConsentEnable").addEventListener("click", async () => {
+    const button = $("iotConsentEnable");
+    if (!$("iotConsentCheck").checked || !consent.doc) return;
+    button.disabled = true;
+    try {
+      const result = await postAction("/api/build_f/iot/disclaimer", "iot-disclaimer", { accept: true, version: consent.doc.version });
+      if (state) state.iot_disclaimer = result.iot_disclaimer;
+      renderConsent(result.iot_disclaimer);
+      closeConsent(true);
+    } catch (error) {
+      const box = $("iotConsentError");
+      box.hidden = false;
+      box.textContent = "Not recorded, IoT stays off: " + (error.message || error);
+      button.disabled = !$("iotConsentCheck").checked;
+    }
+  });
+
+  // the safety line in the Smart Home and IoT card: accepted (which version, when), held off, or not asked yet
+  function renderConsent(c) {
+    if (!c) return;
+    const held = !c.accepted && Array.isArray(c.held) && c.held.length > 0;
+    $("iotSafety").classList.toggle("held", held);
+    $("iotConsentState").textContent = c.accepted
+      ? "IoT safety statement version " + c.version + " accepted" + (c.accepted_at ? " on " + new Date(c.accepted_at).toLocaleString() : "") + "."
+      : held && c.accepted_version
+        ? "IoT is off: the IoT safety statement changed (you accepted version " + c.accepted_version + "; the current one is "
+          + c.version + "). Read it and accept it to turn IoT back on."
+        : held ? "IoT is off: " + c.held.join(", ") + " is switched on, but the IoT safety statement (version " + c.version
+          + ") has not been accepted yet. Read it and accept it to turn IoT on."
+          : "Turning IoT on shows the IoT safety statement first; IoT stays off unless you accept it.";
+    const button = $("iotConsentOpen");
+    button.textContent = held ? "Read and accept…" : "Read the IoT safety statement";
+    button.classList.toggle("primary", held);
+    button.dataset.mode = held ? "accept" : "view";
+  }
+
+  async function acceptHeld() {
+    if (await openConsent("accept")) {
+      toast("IoT safety statement accepted — IoT is on.");
+      refresh();
+      iotRefresh();
+    }
+  }
+  $("iotConsentOpen").addEventListener("click", () => {
+    if ($("iotConsentOpen").dataset.mode === "accept") acceptHeld();
+    else openConsent("view");
+  });
+
+  // false when the person did not accept the statement: then nothing is saved and the cards show IoT off again
+  // (the raw editor keeps what was typed in it)
+  async function consentFirst() {
+    const accepted = await openConsent("accept");
+    if (accepted) return true;
+    if (state) renderServers(state);
+    if (accepted === false) toast("Nothing saved: IoT stays off.");
+    return false;
+  }
+
   async function save(cfg) {
-    const result = await postAction("/api/build_f/tools/config", "tools-config", { config: cfg });
+    // a smart-home server switched on before the statement was accepted: the statement first; Cancel = nothing saved
+    if (turnsOnIot(cfg) && !iotAccepted() && !(await consentFirst())) return;
+    let result;
+    try { result = await postAction("/api/build_f/tools/config", "tools-config", { config: cfg }); }
+    catch (error) {
+      if (error.code !== "iot_disclaimer_required") throw error;
+      if (!(await consentFirst())) return;        // the server knew better (a new entry, or another tab): same dialog
+      result = await postAction("/api/build_f/tools/config", "tools-config", { config: cfg });
+    }
     apply(result);
     toast("Tool settings saved.");
   }
 
   function apply(s) {
     state = s;
+    renderConsent(s.iot_disclaimer);
+    // switched on but held off (an install from before the statement, or a new version of it): ask once per visit
+    const c = s.iot_disclaimer;
+    if (c && !c.accepted && Array.isArray(c.held) && c.held.length && !consent.autoShown) {
+      consent.autoShown = true;
+      acceptHeld();
+    }
     $("toolsEnabled").checked = !!s.enabled;
     $("clerkRole").value = s.clerk_role || "surface";
     const limits = s.limits || {};
@@ -122,7 +278,8 @@
     for (const [name, server] of entries) {
       const card = el("section", { class: "tech-card server-card" });
       const toggle = el("input", { type: "checkbox", "data-server-toggle": name });
-      toggle.checked = !!server.enabled;
+      // a smart-home server held off by the IoT safety statement shows as off: it is off until the statement is accepted
+      toggle.checked = !!server.enabled && !server.blocked;
       toggle.addEventListener("change", () => save(mergedConfig()).catch((e) => toast(String(e.message || e), true)));
       // dot: grey = disabled · amber = enabled but the bridge is not up · red = bridge up, the agent itself unreachable · green = all good
       const health = server.health || null;
@@ -177,7 +334,9 @@
           },
         }));
       card.append(head);
-      if (server.error) card.append(el("div", { class: "card-hint", style: "color:var(--err);margin-top:8px;", text: server.error }));
+      if (server.blocked) card.append(el("div", { class: "card-hint", style: "color:var(--warn);margin-top:8px;",
+        text: "Switched on in tools.json, but held off until the IoT safety statement is accepted (Smart Home and IoT card)." }));
+      else if (server.error) card.append(el("div", { class: "card-hint", style: "color:var(--err);margin-top:8px;", text: server.error }));
       if (starting) card.append(el("div", { class: "card-hint", style: "margin-top:8px;", text: (health.detail || "starting…") + " — this card updates by itself." }));
       else if (agentDown) card.append(el("div", { class: "card-hint", style: "color:var(--err);margin-top:8px;",
         text: (health.detail || "The bridge is up but the agent itself does not answer.")
@@ -213,7 +372,7 @@
         }
         table.append(body);
         card.append(el("div", { class: "table-scroll", "data-pro": "" }, table));   // per-tool policies: Professional only
-      } else if (server.enabled) {
+      } else if (server.enabled && !server.blocked) {
         card.append(el("div", { class: "card-hint", style: "margin-top:8px;", text: "No tools discovered yet — press Test to connect." }));
       }
       // the smart-home server lives inside the Smart Home and IoT panel, above its devices, without its own card chrome
@@ -292,6 +451,7 @@
   }
   function iotLight(d) {                 // [dot class, text to show]
     if (!d || !d.enabled) return ["", "the smart-home server is off — flip its switch above (Professional mode adds one if it is missing)"];
+    if (d.blocked) return ["warn", "Until the statement is accepted, no smart-home server is started and no device is switched."];
     if (!d.connected) return ["err", (d.health && d.health.detail) || "not connected"];
     if (d.health && d.health.ok === false) return ["warn", d.health.detail || d.health.reason || "degraded"];
     return ["ok", ""];
@@ -362,10 +522,12 @@
   function renderIot(d) {
     const [level, detail] = iotLight(d);
     $("iotDot").className = "dot " + level;
+    if (d && d.iot_disclaimer) renderConsent(d.iot_disclaimer);
     const devices = d && d.enabled && Array.isArray(d.devices) ? d.devices : [];
     const on = devices.filter((x) => String(x.state).toUpperCase() === "ON").length;
-    $("iotSub").textContent = !d || !d.enabled ? "no smart-home server enabled" : !d.connected ? "not connected"
-      : devices.length + (devices.length === 1 ? " device" : " devices") + (devices.length ? " · " + on + " on" : "");
+    $("iotSub").textContent = !d || !d.enabled ? "no smart-home server enabled" : d.blocked ? "off · safety statement not accepted"
+      : !d.connected ? "not connected"
+        : devices.length + (devices.length === 1 ? " device" : " devices") + (devices.length ? " · " + on + " on" : "");
     const hint = $("iotHint");
     hint.style.color = level === "err" ? "var(--err)" : level === "warn" ? "var(--warn)" : "";
     hint.textContent = !d || !d.enabled ? detail : detail || (!devices.length ? "No devices yet — put a plug into pairing mode and press Find new devices." : "");

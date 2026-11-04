@@ -61,7 +61,7 @@ OpenAmika 是 Amika 的完整运行框架，全部开源：三层结构的大脑
 | `config/` | 非机密设置：LLM 角色与预设、模型目录与价格、词语替换表，以及工具和消息机器人的配置示例 |
 | `scripts/` | `download_sensevoice.py` 下载语音识别模型；`setup_tts.py` 安装她的声音和她的 Live2D 模型 |
 | `launch.py` | 整套服务一个控制台搞定：启动前预检指示灯，按顺序启动所有服务，按 Ctrl+C 全部停止 |
-| `docs/` | `ARCHITECTURE.md`、`PERSONALITY.md`、`TTS.md`、`AVATAR.md`、`TOOLS.md`、`MESSENGERS.md` |
+| `docs/` | `ARCHITECTURE.md`、`PERSONALITY.md`、`TTS.md`、`AVATAR.md`、`TOOLS.md`、`MESSENGERS.md`、`IOT_DISCLAIMER.md`（IoT 安全与责任声明） |
 
 ## 两种运行方式
 
@@ -240,9 +240,13 @@ Amika（桜井美香，Sakurai Mika）在京都长大，是神社世家的继承
 ## 可选功能
 
 - **工具**（Tools 页面，`docs/TOOLS.md`）：支持任意 MCP 服务器（stdio 或 HTTP），每个工具都可以单独设置 `auto` / `confirm` / `deny` 策略。个人任务智能体（Hermes Agent、nanoMuse）通过 `servers/openamika-agents` 接入。
-- **智能家居**（`IoT/README.md`）：通过 mosquitto + zigbee2mqtt 和项目自带的 `openamika-iot` MCP 服务器控制 Zigbee 智能插座；也可以使用 Home Assistant 自己的 MCP 服务器。
+- **智能家居**（`IoT/README.md`）：通过 mosquitto + zigbee2mqtt 和项目自带的 `openamika-iot` MCP 服务器控制 Zigbee 智能插座；也可以使用 Home Assistant 自己的 MCP 服务器。在你接受 IoT 安全与责任声明之前，它一直保持关闭（见下文）。
 - **Text her**（给她发消息，`docs/MESSENGERS.md`）：一个 Discord 和/或 Telegram 机器人，只回复你允许的用户 ID。
 - **摄像头**（`vision/`）：摄像头开启时，她会描述自己看到的画面；画面帧永远不会离开这台电脑。
+
+### 智能家居：安全与责任
+
+开启 IoT 之前，Tools 页面会先显示 IoT 安全与责任声明（[`docs/IOT_DISCLAIMER.md`](docs/IOT_DISCLAIMER.md#简体中文)，English、日本語、简体中文）；除非你勾选“I have read and accept this”（我已阅读并接受）并点击“Enable IoT”，否则 IoT 会一直保持关闭；声明每次更新，都会再次请你确认。要点：Amika 由大语言模型驱动，具有不确定性。她可能听错或误解你的话，操作错误的设备或在错误的时间操作，重复或跳过某个操作，也可能被她读到、听到的内容操纵（提示词注入）；模型、网络、桥接程序、Zigbee/MQTT 和设备固件也都可能出故障。我们不保证她不会对你的设备、住所、数据，或者人和动物造成伤害。你接入的一切，风险由你自行承担；在法律允许的最大范围内，MekaHime Inc. 和贡献者对任何后果、损害、损失或伤害均不承担责任，本软件按“原样”提供，不附带任何担保（MIT 许可证）。绝对不要接入任何被误用或滥用时可能引发危险的东西：取暖器等加热电器、燃气或水的阀门和水泵、门锁、车库门和大门、报警器、医疗设备、涉及儿童或宠物安全的设备、车辆、机械设备、大功率负载。请对每个设备保留手动、物理上的控制；你可以随时关闭 IoT。如果你不同意，请不要开启 IoT。
 
 ## 测试
 
@@ -251,7 +255,7 @@ envs\brain\python.exe -m pip install -r requirements-dev.txt
 envs\brain\python.exe -m pytest tests -k "not live"
 ```
 
-大约 350 个离线测试，覆盖输出约定、两个流式解析器（brain 与 speech 两侧保持一致）、提示词拼装与缓存布局、记忆渲染、用量账本、控制代理、工具调度（tool clerk）以及启动器。需要 MekaHime 归档语料的回放测试会自动跳过。每次 push 时，GitHub Actions 都会运行同一套测试（`.github/workflows/tests.yml`）。
+大约 380 个离线测试，覆盖输出约定、两个流式解析器（brain 与 speech 两侧保持一致）、提示词拼装与缓存布局、记忆渲染、用量账本、控制代理、工具调度（tool clerk）、IoT 安全与责任声明及其执行，以及启动器。需要 MekaHime 归档语料的回放测试会自动跳过。每次 push 时，GitHub Actions 都会运行同一套测试（`.github/workflows/tests.yml`）。
 
 ## 未包含的内容
 

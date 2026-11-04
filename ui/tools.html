@@ -49,6 +49,17 @@
   <div class="oa-eyebrow rv" style="--d:3"><span>Smart Home and IoT</span><i>家</i></div>
   <section class="tech-card rv" style="--d:4" id="iotCard">
     <h3><span class="dot" id="iotDot"></span> Smart Home and IoT <span class="tool-sub" id="iotSub">checking…</span></h3>
+    <!-- IoT turns on only after the IoT safety statement (docs/IOT_DISCLAIMER.md) was read and accepted: tools.js -->
+    <div class="iot-safety" id="iotSafety">
+      <p><b>Safety first.</b> Amika is an AI: she can mishear, misunderstand, or switch the wrong device at the wrong
+      time, and nothing guarantees that she will not cause harm. Everything you connect is at your own risk. Connect
+      only things that are harmless if switched by mistake: never heaters, cooking appliances, locks, valves, alarms,
+      medical equipment or anything else that could cause danger.</p>
+      <div class="iot-safety-row">
+        <span id="iotConsentState">Turning IoT on shows the IoT safety statement first; IoT stays off unless you accept it.</span>
+        <button class="btn small" id="iotConsentOpen" type="button">Read the IoT safety statement</button>
+      </div>
+    </div>
     <div id="iotServer"></div>
     <div class="card-hint" id="iotHint" hidden></div>
     <div class="iot-grid" id="iotDevices"></div>
@@ -79,6 +90,7 @@
       <b>nanoMuse</b>: <code>python -m openamika_agents nanomuse</code> (needs <code>nanomuse serve</code>; <code>NANOMUSE_TOKEN_FILE</code> in env) ·
       <b>Smart home</b>: <code>python -m openamika_iot</code> (cwd <code>../servers/openamika-iot</code>) ·
       <b>Home Assistant</b>: http → <code>http://homeassistant.local:8123/mcp_server/sse</code> + bearer header · any other MCP server works the same way.
+      Smart-home servers (this one, Home Assistant, or any entry with <code>"kind": "iot"</code>) turn on only after you accept the IoT safety statement.
     </p>
     <details class="oa-details" data-pro>
       <summary>Raw config (tools.json)</summary>
@@ -101,6 +113,32 @@
     </div>
   </section>
 </main>
+
+<!-- The IoT safety statement (text: docs/IOT_DISCLAIMER.md via /api/build_f/iot/disclaimer). Shown before IoT can be
+     turned on, and again whenever its version changes; IoT turns on only after the box is ticked and Enable IoT pressed. -->
+<dialog class="oa-consent" id="iotConsent" aria-labelledby="iotConsentTitle" aria-describedby="iotConsentLead">
+  <div class="oa-consent-head">
+    <h2 id="iotConsentTitle">IoT safety and responsibility statement</h2>
+    <p class="oa-consent-meta"><span id="iotConsentVersion">Version …</span> · MekaHime Inc.</p>
+  </div>
+  <p class="oa-consent-lead" id="iotConsentLead">Before Amika can reach anything in your home, read this statement in
+  full. IoT stays off unless you accept it.</p>
+  <p class="oa-consent-changed" id="iotConsentChanged" hidden></p>
+  <div class="oa-consent-langs" role="group" aria-label="Language of the statement">
+    <button type="button" class="oa-consent-lang" data-lang="en" aria-pressed="true">English</button>
+    <button type="button" class="oa-consent-lang" data-lang="ja" lang="ja" aria-pressed="false">日本語</button>
+    <button type="button" class="oa-consent-lang" data-lang="zh" lang="zh-CN" aria-pressed="false">简体中文</button>
+    <a class="oa-consent-doc" href="https://github.com/zeekk0/OpenAmika/blob/main/docs/IOT_DISCLAIMER.md" target="_blank"
+       rel="noopener">docs/IOT_DISCLAIMER.md</a>
+  </div>
+  <div class="oa-consent-text" id="iotConsentText" tabindex="0" role="region" aria-label="The statement"></div>
+  <label class="oa-consent-check" id="iotConsentAccept"><input type="checkbox" id="iotConsentCheck"> I have read and accept this</label>
+  <p class="oa-consent-error" id="iotConsentError" role="alert" hidden></p>
+  <div class="oa-consent-actions">
+    <button type="button" class="btn" id="iotConsentCancel">Cancel</button>
+    <button type="button" class="btn primary" id="iotConsentEnable" disabled>Enable IoT</button>
+  </div>
+</dialog>
 
 <script src="/ui/common.js"></script>
 <script src="/ui/tools.js"></script>

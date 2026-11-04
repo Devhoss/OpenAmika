@@ -30,7 +30,7 @@
     "load_timeout_s": 900
   },
   "services": {
-    "_readme": "Optional. Programs the launcher starts in its one console (and stops with Ctrl+C). Paths relative to this folder. health = URL answering when up, or port = TCP port opening when up; after = start once that service is up. A service already running is used as is.",
+    "_readme": "Optional. Programs the launcher starts in its one console (and stops with Ctrl+C). Paths relative to this folder. health = URL answering when up, or port = TCP port opening when up; after = start once that service is up. A service already running is used as is. The smart-home services (mqtt, zigbee2mqtt) start only after the IoT safety statement (docs/IOT_DISCLAIMER.md) was accepted on the Tools page.",
     "tts": {
       "enabled": true,
       "_readme": "The OpenAmika voice server (vendor/tts-engine, a MekaHime build of GPT-SoVITS) with Amika's voice. python scripts/setup_tts.py installs both; until then the launcher reports this command missing and she answers in text only. Keep --character in step with tts_character.",

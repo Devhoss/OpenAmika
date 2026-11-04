@@ -21,12 +21,15 @@ What happens
   3. Start: the services in settings.json "services" (TTS, MQTT broker, zigbee2mqtt…) and the agents in
      config/tools.json "autostart" (Hermes, nanoMuse), then embedder → brain → vision → speech. Every
      process runs hidden. A service that is already running (started by hand) is used as is and left alone.
+     The smart-home services (MQTT broker, zigbee2mqtt) are held back until the IoT safety statement
+     (docs/IOT_DISCLAIMER.md) is accepted on the Tools page; accepted while running, they start then.
   4. Open the web UI. Ctrl+C stops everything this launcher started.
 
 The optional local embedding service (brain/embed_server.py, BAAI/bge-m3 cut to 768 dims) starts before
 the brain when settings.json has an `embedder` block; the brain reaches it through AMIKA_EMBEDDING_URL.
 """
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -55,6 +58,9 @@ AGENT_HEALTH = {'hermes': ('HERMES_URL', '/health'), 'nanomuse': ('NANOMUSE_URL'
 # the smart-home chain is several processes but one thing to the person: one row, one light
 IOT_SERVICES = ('mqtt', 'zigbee2mqtt')
 IOT_CHECKS = ('service mqtt', 'service zigbee2mqtt', 'smart home broker', 'Zigbee dongle')
+IOT_STATEMENT_CHECK = 'IoT safety statement'
+IOT_RULES_PATH = Path(__file__).resolve().parent / 'brain' / 'iot_disclaimer.py'
+_IOT_RULES = {}
 LEVEL_RANK = {'ok': 0, 'warn': 1, 'err': 2}
 BUSY_WINDOW_S = 2.5          # a log line newer than this = "working"
 # log lines that are not activity (health polls and the like); the log files keep everything
@@ -603,11 +609,60 @@ def configured_services(cfg):
     return out
 
 
+def iot_rules():
+    """brain/iot_disclaimer.py (standard library only), loaded by its path: the IoT safety statement's version, what
+    counts as IoT and whether config/tools.json records the acceptance. None when it cannot be loaded; then no
+    smart-home service starts."""
+    if 'module' not in _IOT_RULES:
+        try:
+            spec = importlib.util.spec_from_file_location('openamika_iot_disclaimer', IOT_RULES_PATH)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as error:
+            log(f'IoT safety rules unreadable ({type(error).__name__}: {error}): the smart home stays off')
+            module = None
+        _IOT_RULES['module'] = module
+    return _IOT_RULES['module']
+
+
+def iot_accepted(tools):
+    """True when config/tools.json records the acceptance of the current IoT safety statement."""
+    rules = iot_rules()
+    return bool(rules and rules.accepted(tools or {}))
+
+
+def is_smart_home_server(name, scfg):
+    rules = iot_rules()
+    return rules.is_smart_home(name, scfg) if rules else name == 'iot'
+
+
+def hold_iot_services(services, tools):
+    """(services to start, smart-home services held back): the MQTT broker and zigbee2mqtt wait until the IoT safety
+    statement (docs/IOT_DISCLAIMER.md) is accepted on the Tools page."""
+    if iot_accepted(tools):
+        return list(services), []
+    rules = iot_rules()
+    held = [s for s in services if (rules.is_iot_service(s.name, s.cmd, s.cwd) if rules else s.name in IOT_SERVICES)]
+    return [s for s in services if s not in held], held
+
+
+def start_plan(cfg, tools):
+    """What the launcher starts before the core: (services, smart-home services held back, agents). The MQTT broker
+    and zigbee2mqtt, and a smart-home server's autostart, wait for the IoT safety statement to be accepted."""
+    services, held = hold_iot_services(configured_services(cfg), tools)
+    agents = agent_services(tools) if tools and tools.get('enabled') else []
+    return services, held, agents
+
+
 def agent_services(tools):
-    """Agents from config/tools.json autostart entries, so they come up here, before the brain needs them."""
+    """Agents from config/tools.json autostart entries, so they come up here, before the brain needs them.
+    A smart-home server's autostart waits for the IoT safety statement like the services do."""
     out = []
+    accepted = iot_accepted(tools)
     for name, scfg in ((tools or {}).get('mcpServers') or {}).items():
         if not isinstance(scfg, dict) or not scfg.get('enabled') or not scfg.get('autostart'):
+            continue
+        if not accepted and is_smart_home_server(name, scfg):
             continue
         auto = scfg['autostart']
         if isinstance(auto, str):
@@ -680,6 +735,13 @@ class Report:
             else:
                 settle(check)
 
+    def iot_accepted(self, version, started):
+        """The IoT safety statement was accepted while the launcher runs: its line turns green."""
+        for check in self.checks:
+            if check['name'] == IOT_STATEMENT_CHECK:
+                check['level'] = 'ok'
+                check['detail'] = f'accepted (version {version})' + (f' · started {", ".join(started)}' if started else '')
+
     def save(self):
         LOGS.mkdir(exist_ok=True)
         PREFLIGHT.write_text(json.dumps({'at': datetime.now().isoformat(timespec='seconds'), 'checks': self.checks,
@@ -687,7 +749,8 @@ class Report:
                                         ensure_ascii=False, indent=2), 'utf-8')
 
 
-def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=False, printer=None):
+def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=False, printer=None, held_iot=()):
+    """held_iot: the smart-home services held back because the IoT safety statement was not accepted."""
     report = Report(printer)
     for label, python in (('brain python', cfg.get('brain_python')), ('speech python', cfg.get('speech_python')),
                           ('embedder python', (emb or {}).get('python')), ('vision python', (vis or {}).get('python'))):
@@ -758,11 +821,16 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
             report.add('err', f'service {svc.name}', f'folder missing: {svc.cwd}')
         else:
             report.add('warn', f'service {svc.name}', 'not running — will be started')
+    held_servers = []                 # smart-home tool servers switched on but held off by the IoT safety statement
+    iot_ok = iot_accepted(tools)
     if tools_error:
         report.add('err', 'tools', tools_error)
     elif tools and tools.get('enabled'):
         for name, scfg in (tools.get('mcpServers') or {}).items():
             if not isinstance(scfg, dict) or not scfg.get('enabled'):
+                continue
+            if not iot_ok and is_smart_home_server(name, scfg):
+                held_servers.append(name)
                 continue
             agent = next((a for a in agents if a.name == name), None)
             if name in AGENT_HEALTH:
@@ -795,6 +863,12 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
     else:
         report.add('ok', 'tools', 'tool layer disabled' if tools is not None
                    else 'tool layer off (no config/tools.json yet; the Tools page creates it)')
+    if held_iot or held_servers:
+        rules = iot_rules()
+        what = ', '.join([*(s.name for s in held_iot), *held_servers])
+        report.add('warn', IOT_STATEMENT_CHECK,
+                   f'not accepted (version {rules.IOT_DISCLAIMER_VERSION if rules else "?"}): {what} held off — turn '
+                   f'IoT on from the Tools page to read and accept docs/IOT_DISCLAIMER.md')
     if deep:
         for key, packages in (
             ('brain_python', ['flask', 'flask_cors', 'flask_socketio', 'requests', 'dotenv', 'google.genai']),
@@ -989,15 +1063,16 @@ def main():
     if len(set(ports)) != len(ports) or any(not 1024 <= p <= 65535 for p in ports):
         raise RuntimeError('Use distinct ports between 1024 and 65535.')
     tools, tools_error = load_tools()
-    services = configured_services(cfg)
-    agents = agent_services(tools) if tools and tools.get('enabled') else []
+    # the MQTT broker and zigbee2mqtt wait for the IoT safety statement to be accepted (Tools page)
+    services, held_iot, agents = start_plan(cfg, tools)
     url = f"http://localhost:{cfg['chat_port']}"
 
     if args.check:
         def printer(level, name, detail):
             print(f"  {dot(level)} {name:<22} {detail}")
         print(f'{BOLD}{APP} pre-flight{RESET}  {ROOT}')
-        report = preflight(cfg, emb, vis, tools, tools_error, services, agents, list_processes(), deep=True, printer=printer)
+        report = preflight(cfg, emb, vis, tools, tools_error, services, agents, list_processes(), deep=True, printer=printer,
+                           held_iot=held_iot)
         report.save()
         print(f"  {report.count('ok')} ok · {report.count('warn')} warning(s) · {report.count('err')} problem(s)")
         print(f'{APP} preflight {"passed" if not report.count("err") else "found problems"}. No models loaded and no API requests made.')
@@ -1019,7 +1094,7 @@ def main():
         state['grace'] = grace_cleanup(procs)
         state['phase'] = 'pre-flight…'
         procs = list_processes()
-        report = preflight(cfg, emb, vis, tools, tools_error, services, agents, procs)
+        report = preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, held_iot=held_iot)
         report.save()
         state['report'] = report
 
@@ -1071,10 +1146,39 @@ def main():
         last_instance = time.monotonic()
         retried = set()
         last_live = 0.0
+        last_iot_check = 0.0
+        iot_waiting = any(c['name'] == IOT_STATEMENT_CHECK and c['level'] != 'ok' for c in report.checks)
         while True:
             time.sleep(0.5)
             before = [(s.name, s.state) for s in everything]
             tick()
+            # the IoT safety statement accepted on the Tools page while this runs: start the held smart-home services
+            if iot_waiting and time.monotonic() - last_iot_check > 3:
+                last_iot_check = time.monotonic()
+                if iot_accepted(load_tools()[0]):
+                    iot_waiting = False
+                    late, held_iot = sorted(held_iot, key=lambda s: 1 if s.after else 0), []
+                    log('IoT safety statement accepted' + (': starting ' + ', '.join(s.name for s in late) if late else ''))
+                    z2m = next((s for s in late if s.name == 'zigbee2mqtt'), None)
+                    if z2m:
+                        dongle_port, _why = serial_dongle()
+                        if dongle_port:
+                            z2m.env.setdefault('ZIGBEE2MQTT_CONFIG_SERIAL_PORT', dongle_port)
+                            if not z2m.is_up():
+                                log(f'zigbee2mqtt: priming the dongle: {prime_dongle(dongle_port)}')
+                    for svc in late:
+                        services.append(svc)
+                        everything.append(svc)
+                        if svc.after:
+                            dep = next((s for s in services if s.name == svc.after), None)
+                            if dep is not None and dep.state == 'starting':
+                                dep.wait_up(tick=tick)
+                        svc.start()
+                        if svc.state == 'starting':
+                            watchers.append(LogWatch(svc))
+                            watchers[-1].start()
+                    report.iot_accepted(iot_rules().IOT_DISCLAIMER_VERSION, [s.name for s in late])
+                    report.save()
             if time.monotonic() - last_live > 5:         # rows whose light comes from their own health JSON
                 last_live = time.monotonic()
                 for svc in everything:

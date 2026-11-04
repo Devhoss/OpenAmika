@@ -61,7 +61,7 @@ OpenAmikaは、Amikaを動かす仕組み一式を、まるごとオープンソ
 | `config/` | 秘密情報を含まない設定：LLMのロールとプリセット、モデルのカタログと価格、単語の置換ルール、ツールとメッセンジャーの設定例 |
 | `scripts/` | `download_sensevoice.py`は音声認識モデルを取得し、`setup_tts.py`は彼女の声とLive2Dモデルをインストールします |
 | `launch.py` | スタック全体をひとつのコンソールで：起動前チェックのランプを表示し、すべてを順番に起動して、Ctrl+Cでまとめて停止します |
-| `docs/` | `ARCHITECTURE.md`、`PERSONALITY.md`、`TTS.md`、`AVATAR.md`、`TOOLS.md`、`MESSENGERS.md` |
+| `docs/` | `ARCHITECTURE.md`、`PERSONALITY.md`、`TTS.md`、`AVATAR.md`、`TOOLS.md`、`MESSENGERS.md`、`IOT_DISCLAIMER.md`（IoTの安全と責任に関する声明） |
 
 ## 2通りの動かし方
 
@@ -240,9 +240,13 @@ Amika（桜井美香、Sakurai Mika）は、京都で神社の家の跡取りと
 ## オプション機能
 
 - **ツール**（Toolsページ、`docs/TOOLS.md`）：stdioでもHTTPでも、どんなMCPサーバーでもつなげられて、ツールごとに`auto` / `confirm` / `deny`のポリシーを設定できます。個人用のタスクエージェント（Hermes Agent、nanoMuse）は、`servers/openamika-agents`経由で接続します。
-- **スマートホーム**（`IoT/README.md`）：mosquitto + zigbee2mqttと、公式の`openamika-iot` MCPサーバーを通じて、Zigbeeのスマートプラグを操作できます。Home Assistant自身のMCPサーバーも使えます。
+- **スマートホーム**（`IoT/README.md`）：mosquitto + zigbee2mqttと、公式の`openamika-iot` MCPサーバーを通じて、Zigbeeのスマートプラグを操作できます。Home Assistant自身のMCPサーバーも使えます。IoTの安全と責任に関する声明に同意するまでは、オフのままです（下記）。
 - **Text her**（`docs/MESSENGERS.md`）：DiscordやTelegram（片方でも両方でもOK）のボットで、許可したユーザーIDにだけ返事をします。
 - **カメラ**（`vision/`）：カメラがオンの間、彼女は見えているものを言葉にしてくれます。映像のフレームがPCの外に出ることはありません。
+
+### スマートホーム：安全と責任
+
+IoTを有効にする前に、ToolsページはIoTの安全と責任に関する声明（[`docs/IOT_DISCLAIMER.md`](docs/IOT_DISCLAIMER.md#日本語)、English・日本語・简体中文）を表示します。「I have read and accept this」（これを読み、同意します）にチェックを入れて「Enable IoT」を押さない限り、IoTはオフのままです。声明が変わるたびに、もう一度同意を求められます。要点：Amikaは大規模言語モデルで動いており、その動作は非決定的です。聞き間違えたり誤解したり、違うデバイスを操作したり、間違ったタイミングで操作したり、操作を繰り返したり飛ばしたりすることがあり、読んだり聞いたりした内容に誘導されること（プロンプトインジェクション）もあります。モデル、ネットワーク、ブリッジ、Zigbee/MQTT、デバイスのファームウェアも故障することがあります。Amikaがあなたのデバイス、住まい、データ、人や動物に害を与えないという保証はありません。接続するものはすべて自己責任です。MekaHime Inc.および貢献者は、法令が認める最大限の範囲で、いかなる結果、損害、損失、傷害についても責任を負いません。本ソフトウェアは「現状のまま」無保証で提供されます（MITライセンス）。誤用や悪用によって危険を生じうるもの（暖房器具などの加熱器具、ガスや水のバルブとポンプ、錠、ガレージのドアや門扉、警報装置、医療機器、子どもやペットの安全に関わる機器、車両、機械、消費電力の大きい機器）は、決して接続しないでください。すべてのデバイスについて手動で物理的に操作できる手段を確保してください。IoTはいつでもオフにできます。同意できない場合は、IoTを有効にしないでください。
 
 ## テスト
 
@@ -251,7 +255,7 @@ envs\brain\python.exe -m pip install -r requirements-dev.txt
 envs\brain\python.exe -m pytest tests -k "not live"
 ```
 
-約350件のオフラインテストで、出力の契約（コントラクト）、2つのストリーミングパーサー（brainとspeechで結果が一致すること）、プロンプトの組み立てとキャッシュのレイアウト、記憶のレンダリング、使用量の台帳、コントロール用のプロキシ、ツールクラーク（tool clerk）、ランチャーをカバーしています。MekaHimeがアーカイブしているコーパスが必要なリプレイテストは、自動でスキップされます。GitHub Actionsでも、pushのたびに同じテストスイートを実行しています（`.github/workflows/tests.yml`）。
+約380件のオフラインテストで、出力の契約（コントラクト）、2つのストリーミングパーサー（brainとspeechで結果が一致すること）、プロンプトの組み立てとキャッシュのレイアウト、記憶のレンダリング、使用量の台帳、コントロール用のプロキシ、ツールクラーク（tool clerk）、IoTの安全と責任に関する声明とその適用、ランチャーをカバーしています。MekaHimeがアーカイブしているコーパスが必要なリプレイテストは、自動でスキップされます。GitHub Actionsでも、pushのたびに同じテストスイートを実行しています（`.github/workflows/tests.yml`）。
 
 ## 含まれていないもの
 

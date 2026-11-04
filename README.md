@@ -72,7 +72,7 @@ brain on MekaHime's servers.
 | `config/` | non-secret settings: LLM roles and presets, model catalogs and prices, word replacements, examples for tools and messengers |
 | `scripts/` | `download_sensevoice.py` fetches the speech-recognition model; `setup_tts.py` installs her voice and her Live2D model |
 | `launch.py` | one console for the whole stack: pre-flight lights, starts everything in order, Ctrl+C stops it all |
-| `docs/` | `ARCHITECTURE.md`, `PERSONALITY.md`, `TTS.md`, `AVATAR.md`, `TOOLS.md`, `MESSENGERS.md` |
+| `docs/` | `ARCHITECTURE.md`, `PERSONALITY.md`, `TTS.md`, `AVATAR.md`, `TOOLS.md`, `MESSENGERS.md`, `IOT_DISCLAIMER.md` (the IoT safety statement) |
 
 ## Two ways to run her
 
@@ -304,9 +304,26 @@ Everything binds to 127.0.0.1.
 - **Tools** (Tools page, `docs/TOOLS.md`): any MCP server, stdio or HTTP, with per-tool `auto` / `confirm` /
   `deny` policies. Personal task agents (Hermes Agent, nanoMuse) plug in through `servers/openamika-agents`.
 - **Smart home** (`IoT/README.md`): Zigbee plugs through mosquitto + zigbee2mqtt and the first-party
-  `openamika-iot` MCP server; Home Assistant's own MCP server works too.
+  `openamika-iot` MCP server; Home Assistant's own MCP server works too. It stays off until you accept the IoT
+  safety statement (below).
 - **Text her** (`docs/MESSENGERS.md`): a Discord and/or Telegram bot that answers only the user ids you allow.
 - **Camera** (`vision/`): she describes what she sees while the camera is on; frames never leave the PC.
+
+### Smart home: safety and responsibility
+
+Before IoT turns on, the Tools page shows the IoT safety statement,
+[`docs/IOT_DISCLAIMER.md`](docs/IOT_DISCLAIMER.md) (English, 日本語, 简体中文), and IoT stays off unless you tick
+"I have read and accept this" and press Enable IoT; it asks again whenever the statement changes. In short: Amika
+runs on large language models, which are non-deterministic. She can mishear or misunderstand you, act on the wrong
+device or at the wrong time, repeat or skip an action, or be manipulated by what she reads or hears, and the
+models, networks, bridges, Zigbee/MQTT and device firmware can fail. There is no guarantee that she will not cause
+harm to your devices, your home, your data, or people or animals. Everything you connect is at your own risk;
+MekaHime Inc. and the contributors are not responsible for any outcome, damage, loss or injury, to the maximum extent
+the law allows, and the software is provided as is, without warranty (MIT License). Never connect anything that could
+cause danger if misused or abused: heaters and other heating appliances, gas or water valves and pumps, locks,
+garage doors and gates, alarms, medical, child- or pet-safety equipment, vehicles, machinery, high-power loads.
+Keep manual, physical control of every device; you can turn IoT off at any time. If you do not agree, do not enable
+IoT.
 
 ## Tests
 
@@ -315,9 +332,9 @@ envs\brain\python.exe -m pip install -r requirements-dev.txt
 envs\brain\python.exe -m pytest tests -k "not live"
 ```
 
-About 350 offline tests cover the output contract, both streaming parsers (brain/speech parity), prompt
-assembly and caching layout, memory rendering, the usage ledger, the control proxies, the tool clerk and the
-launcher. Replay tests that need MekaHime's archived corpora skip themselves. GitHub Actions runs the same suite
+About 380 offline tests cover the output contract, both streaming parsers (brain/speech parity), prompt
+assembly and caching layout, memory rendering, the usage ledger, the control proxies, the tool clerk, the IoT
+safety statement and its enforcement, and the launcher. Replay tests that need MekaHime's archived corpora skip themselves. GitHub Actions runs the same suite
 on every push (`.github/workflows/tests.yml`).
 
 ## What is not included

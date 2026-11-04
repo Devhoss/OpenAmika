@@ -691,9 +691,12 @@ async def build_f_preset(request: Request):
 
 
 async def _build_f_control(request, route, action, allowed_fields, max_body=8192, check_busy=True, base=None,
-                           timeout=10):
+                           timeout=10, precheck=None):
     """base: the service the control goes to (the brain unless given — the messengers service has its own API).
-    timeout: seconds for the brain's answer (a model detection probes several models; it takes longer)."""
+    timeout: seconds for the brain's answer (a model detection probes several models; it takes longer).
+    precheck: called with the parsed JSON body before anything is forwarded; it refuses by raising HTTPException
+    (the IoT safety statement gates use it). A refusal from the brain that carries a "code" reaches the page as
+    detail {code, message}."""
     global _wipe_in_progress
     expected_origin = f"{request.url.scheme}://{request.url.netloc}"
     if request.headers.get("origin") != expected_origin or request.headers.get("x-build-f-action") != action:
@@ -714,13 +717,18 @@ async def _build_f_control(request, route, action, allowed_fields, max_body=8192
             raise HTTPException(status_code=400, detail="Invalid JSON.") from None
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="A JSON object is required.")
+        if precheck is not None:
+            precheck(payload)
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as client:
             async with client.post((base or HANE_URL).rstrip("/") + route, json=payload,
                                    headers={"X-Build-F-Action": action}, allow_redirects=False) as response:
                 result = await response.json()
                 if response.status in (400, 403, 409, 503):
-                    raise HTTPException(status_code=response.status, detail=(result.get("error", "Action was refused.")
-                                        if isinstance(result, dict) else "Action was refused."))
+                    message = (result.get("error", "Action was refused.") if isinstance(result, dict)
+                               else "Action was refused.")
+                    code = result.get("code") if isinstance(result, dict) else None
+                    raise HTTPException(status_code=response.status,
+                                        detail={"code": code, "message": message} if isinstance(code, str) and code else message)
                 if response.status != 200 or not isinstance(result, dict) or result.get("ok") is not True:
                     raise ValueError("Control result is unconfirmed")
         return {key: result.get(key) for key in allowed_fields}
@@ -743,9 +751,64 @@ async def build_f_select_models(request: Request):
                                   ("ok", "selections", "options", "presets", "benchmark", "transport", "ollama", "selection_fallback"))
 
 
-# everything the Tools page renders: jobs/relay_queue (agent delegations), clerk_role, and "config" (the raw
-# tools.json, env/cwd included, so a save from the page never strips what the cards do not show)
-_TOOLS_FIELDS = ("ok", "enabled", "clerk_role", "limits", "servers", "pending", "jobs", "relay_queue", "log", "config", "dialogue")
+# everything the Tools page renders: jobs/relay_queue (agent delegations), clerk_role, "config" (the raw
+# tools.json, env/cwd included, so a save from the page never strips what the cards do not show) and
+# "iot_disclaimer" (the IoT safety statement's version and acceptance)
+_TOOLS_FIELDS = ("ok", "enabled", "clerk_role", "limits", "servers", "pending", "jobs", "relay_queue", "log", "config", "dialogue",
+                 "iot_disclaimer")
+
+
+# ── IoT safety statement: IoT turns on only after docs/IOT_DISCLAIMER.md was read and accepted on the Tools page ──
+def _load_iot_disclaimer():
+    """brain/iot_disclaimer.py (standard library only): the statement's version, what counts as IoT, and the
+    acceptance in config/tools.json. The brain and the launcher apply the same file, so the three never disagree."""
+    import importlib.util
+    path = Path(__file__).resolve().parent.parent / "brain" / "iot_disclaimer.py"
+    spec = importlib.util.spec_from_file_location("openamika_iot_disclaimer", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+IOT_DISCLAIMER = _load_iot_disclaimer()
+
+
+def _iot_refusal():
+    """409 for a control that would turn IoT on, or use it, before the current statement was accepted; the Tools
+    page answers detail.code "iot_disclaimer_required" by showing the statement."""
+    return HTTPException(status_code=409, detail=IOT_DISCLAIMER.required_detail())
+
+
+def _iot_config_gate(payload):
+    """tools-config: a tools.json that switches a smart-home server on needs the accepted statement. The acceptance is
+    read from config/tools.json on this machine, so the gate holds even when the brain does not answer."""
+    config = payload.get("config")
+    if isinstance(config, dict) and IOT_DISCLAIMER.turns_on_iot(config) \
+            and not IOT_DISCLAIMER.accepted(IOT_DISCLAIMER.read_tools()):
+        raise _iot_refusal()
+
+
+def _iot_server_gate(payload):
+    """tools-test / tools-start: connecting or starting a smart-home server needs the accepted statement."""
+    name = payload.get("server")
+    doc = IOT_DISCLAIMER.read_tools()
+    servers = doc.get("mcpServers") if isinstance(doc.get("mcpServers"), dict) else {}
+    if isinstance(name, str) and IOT_DISCLAIMER.is_smart_home(name, servers.get(name)) and not IOT_DISCLAIMER.accepted(doc):
+        raise _iot_refusal()
+
+
+def _iot_use_gate(payload):
+    """iot-device / iot-pairing: the Smart home panel switches nothing before the statement was accepted."""
+    if not IOT_DISCLAIMER.accepted(IOT_DISCLAIMER.read_tools()):
+        raise _iot_refusal()
+
+
+def _iot_accept_gate(payload):
+    """iot-disclaimer: only an explicit acceptance of the current version goes on to the brain."""
+    if payload.get("accept") is not True or payload.get("version") != IOT_DISCLAIMER.IOT_DISCLAIMER_VERSION:
+        raise HTTPException(status_code=400, detail=(
+            f"Read the current IoT safety statement (version {IOT_DISCLAIMER.IOT_DISCLAIMER_VERSION}) and tick "
+            "“I have read and accept this” first."))
 
 
 @app.get("/api/build_f/tools")
@@ -767,12 +830,16 @@ async def build_f_tools_status():
 
 @app.post("/api/build_f/tools/config")
 async def build_f_tools_config(request: Request):
-    return await _build_f_control(request, "/api/build_f/tools/config", "tools-config", _TOOLS_FIELDS, max_body=65536)
+    """Save the Tools page's settings (the whole tools.json). A config that switches a smart-home server on is refused
+    (409, iot_disclaimer_required) until the current IoT safety statement has been accepted."""
+    return await _build_f_control(request, "/api/build_f/tools/config", "tools-config", _TOOLS_FIELDS, max_body=65536,
+                                  precheck=_iot_config_gate)
 
 
 @app.post("/api/build_f/tools/test")
 async def build_f_tools_test(request: Request):
-    return await _build_f_control(request, "/api/build_f/tools/test", "tools-test", ("ok", "server", "kind", "tools", "health"))
+    return await _build_f_control(request, "/api/build_f/tools/test", "tools-test", ("ok", "server", "kind", "tools", "health"),
+                                  precheck=_iot_server_gate)
 
 
 @app.post("/api/build_f/tools/approve")
@@ -783,7 +850,8 @@ async def build_f_tools_approve(request: Request):
 @app.post("/api/build_f/tools/start")
 async def build_f_tools_start(request: Request):
     """Start an agent's own process (config autostart) from the Tools page ({server})."""
-    return await _build_f_control(request, "/api/build_f/tools/start", "tools-start", ("ok", "server", "health", "started"))
+    return await _build_f_control(request, "/api/build_f/tools/start", "tools-start", ("ok", "server", "health", "started"),
+                                  precheck=_iot_server_gate)
 
 
 @app.post("/api/build_f/tools/job")
@@ -875,7 +943,8 @@ async def build_f_openrouter_key_set(request: Request):
 
 @app.get("/api/build_f/iot")
 async def build_f_iot():
-    """The Smart home panel's data (devices, readings, pairing state), straight from the brain."""
+    """The Smart home panel's data (devices, readings, pairing state), straight from the brain. "blocked" says the
+    smart-home server is switched on but held off until the IoT safety statement is accepted."""
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as client:
             async with client.get(HANE_URL.rstrip("/") + "/api/build_f/iot", allow_redirects=False) as response:
@@ -884,7 +953,8 @@ async def build_f_iot():
                 payload = await response.json()
         if not isinstance(payload, dict) or payload.get("ok") is not True:
             raise ValueError("Unexpected smart home payload")
-        return {key: payload.get(key) for key in ("ok", "enabled", "connected", "server", "health", "devices", "discovery", "error")}
+        return {key: payload.get(key) for key in ("ok", "enabled", "connected", "server", "health", "devices", "discovery", "error",
+                                                  "blocked", "iot_disclaimer")}
     except HTTPException:
         raise
     except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
@@ -895,14 +965,35 @@ async def build_f_iot():
 async def build_f_iot_device(request: Request):
     """Manual device action from the panel ({device, action} | {device, nickname} | {device, note})."""
     return await _build_f_control(request, "/api/build_f/iot/device", "iot-device", ("ok", "device", "result", "error"),
-                                  check_busy=False)
+                                  check_busy=False, precheck=_iot_use_gate)
 
 
 @app.post("/api/build_f/iot/pairing")
 async def build_f_iot_pairing(request: Request):
     """Open/close zigbee2mqtt pairing from the panel ({enable, seconds})."""
     return await _build_f_control(request, "/api/build_f/iot/pairing", "iot-pairing", ("ok", "result", "discovery", "error"),
-                                  check_busy=False)
+                                  check_busy=False, precheck=_iot_use_gate)
+
+
+@app.get("/api/build_f/iot/disclaimer")
+async def build_f_iot_disclaimer():
+    """The IoT safety statement (docs/IOT_DISCLAIMER.md: English, Japanese, Simplified Chinese) and whether its current
+    version was accepted (config/tools.json). The Tools page shows it before IoT can be turned on. Read on this
+    machine, so it works while the brain is down; an unreadable or mismatched statement means IoT cannot be turned on."""
+    try:
+        statement = IOT_DISCLAIMER.statement()
+    except (OSError, ValueError):
+        raise HTTPException(status_code=503, detail=("The IoT safety statement (docs/IOT_DISCLAIMER.md) cannot be read, "
+                                                     "so IoT cannot be turned on.")) from None
+    return {"ok": True, **IOT_DISCLAIMER.status(IOT_DISCLAIMER.read_tools()), "statement": statement}
+
+
+@app.post("/api/build_f/iot/disclaimer")
+async def build_f_iot_disclaimer_accept(request: Request):
+    """Record the person's acceptance of the current IoT safety statement ({accept: true, version}); the brain writes it
+    into config/tools.json with the time. Only the statement's dialog on the Tools page sends this."""
+    return await _build_f_control(request, "/api/build_f/iot/disclaimer", "iot-disclaimer", ("ok", "iot_disclaimer"),
+                                  check_busy=False, precheck=_iot_accept_gate)
 
 
 @app.get("/api/preflight")

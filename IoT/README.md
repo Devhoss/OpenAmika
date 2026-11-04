@@ -6,7 +6,32 @@ plugs ── SONOFF Zigbee Dongle Plus MG24 (COM port) ── zigbee2mqtt ──
 
 Everything here is started by `Start_OpenAmika.bat` (settings.json → `services.mqtt`, `services.zigbee2mqtt`); the
 smart-home MCP server itself is `servers/openamika-iot`, spawned by `config/tools.json` (`iot`). The launcher
-finds the dongle's COM port on its own and hands it to zigbee2mqtt (`ZIGBEE2MQTT_CONFIG_SERIAL_PORT`).
+finds the dongle's COM port on its own and hands it to zigbee2mqtt (`ZIGBEE2MQTT_CONFIG_SERIAL_PORT`). None of it
+starts before you have accepted the IoT safety statement (below).
+
+## Safety and responsibility
+
+**Read [docs/IOT_DISCLAIMER.md](../docs/IOT_DISCLAIMER.md) (English, 日本語, 简体中文) before you connect anything.**
+Amika runs on large language models, which are non-deterministic: the same words can lead to different actions.
+She can mishear or misunderstand you, switch the wrong device, act at the wrong time, repeat or skip an action, or
+be manipulated by text or audio she reads or hears (prompt injection), and the models, networks, mosquitto,
+zigbee2mqtt, the dongle and device firmware can all fail. Nothing guarantees that she will not cause harm to your
+devices, your home, your data, or people or animals. Everything you connect is at your own risk, and MekaHime Inc.
+and the contributors are not responsible for any outcome, damage, loss or injury, to the maximum extent the law
+allows; the software comes as is, without warranty (MIT License).
+
+Connect only things that are harmless if they are switched at the wrong time or left on or off: never heaters,
+stoves, ovens, irons or other heating appliances, gas or water valves and pumps, door locks, garage doors and
+gates, alarms and security systems, medical or life-support equipment, child- or pet-safety devices, vehicles,
+machinery and power tools, high-power loads, or anything else whose failure could cause a fire, flooding or injury
+or let someone in. Her confirmation steps and safety checks are best-effort, never a guarantee; keep manual,
+physical control of every device. You can turn IoT off at any time on the Tools page.
+
+OpenAmika enforces the acceptance: the Tools page shows the statement when you turn IoT on and records the version
+you accepted, with the time, in `config/tools.json` (`iot_disclaimer`). Until the current version is accepted, the
+brain refuses to start or connect any smart-home server, the launcher does not start mosquitto or zigbee2mqtt (it
+starts them as soon as you accept), and `servers/openamika-iot` refuses to start. A new version of the statement
+turns IoT off again until you accept it. If you do not agree, do not enable IoT.
 
 | Piece | Where |
 |---|---|
@@ -51,7 +76,8 @@ version: 5
 ```
 
 Then set `services.mqtt.enabled` and `services.zigbee2mqtt.enabled` to `true` in settings.json and enable the `iot`
-server on the Tools page (or in `config/tools.json`, from `config/tools.example.json`).
+server on the Tools page (it adds one from `config/tools.example.json` in Professional mode). The Tools page shows the
+IoT safety statement first; IoT turns on only after you tick "I have read and accept this" and press Enable IoT.
 
 If zigbee2mqtt ever reports the dongle missing: Device Manager must show "Silicon Labs CP210x USB to UART Bridge
 (COMx)"; if it shows the dongle with an error (code 28), run `Setup_IoT_admin.bat`.
