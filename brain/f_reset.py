@@ -136,7 +136,7 @@ def install_reset(g, memory, meter, worker_lock, work_requested):
     def wipe_route():
         request=g['request']
         if request.headers.get('Origin'):
-            return g['jsonify']({'ok':False,'error':'Use the Build F website to confirm this action.'}),403
+            return g['jsonify']({'ok':False,'error':'Use the OpenAmika page to confirm this action.'}),403
         if request.headers.get('X-Build-F-Action')!='wipe-memory':
             return g['jsonify']({'ok':False,'error':'Explicit wipe action required.'}),403
         data=request.get_json(silent=True) if request.is_json else None

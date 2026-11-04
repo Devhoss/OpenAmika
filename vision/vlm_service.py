@@ -391,11 +391,12 @@ def main():
 
     if args.check:
         import importlib.util
-        missing = [n for n in ("torch", "transformers", "cv2", "PIL", "numpy",
-                               "fastapi", "uvicorn", "websocket")
-                   if importlib.util.find_spec(n) is None]
-        print("Missing modules:", missing)
-        assert not missing
+        names = ("torch", "transformers", "cv2", "PIL", "numpy", "fastapi", "uvicorn", "websocket")
+        missing = [n for n in names if importlib.util.find_spec(n) is None]
+        if missing:
+            print(f"vision check: missing modules: {', '.join(missing)}")
+            raise SystemExit(1)
+        print(f"vision check: all importable ({', '.join(names)})")
         return
 
     import uvicorn

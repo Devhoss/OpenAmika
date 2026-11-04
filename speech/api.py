@@ -700,7 +700,7 @@ async def _build_f_control(request, route, action, allowed_fields, max_body=8192
     global _wipe_in_progress
     expected_origin = f"{request.url.scheme}://{request.url.netloc}"
     if request.headers.get("origin") != expected_origin or request.headers.get("x-build-f-action") != action:
-        raise HTTPException(status_code=403, detail="Use the Build F page for this action.")
+        raise HTTPException(status_code=403, detail="Use the OpenAmika page for this action.")
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
         raise HTTPException(status_code=415, detail="JSON is required.")
     # check_busy=False: actions that touch nothing of hers (switching a plug) may run while she talks

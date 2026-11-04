@@ -45,6 +45,7 @@ import unicodedata
 import webbrowser
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent
@@ -301,6 +302,108 @@ def roles_all_local():
     except Exception:
         return False
     return bool(picks) and all(isinstance(k, str) and ':ollama:' in k for k in picks)
+
+
+OLLAMA_DEFAULT = 'http://127.0.0.1:11434'
+
+
+def ollama_roles():
+    """{model: [roles]} for the LLM roles that run on Ollama: config/llm_roles.json selections "<role>:ollama:<model>"."""
+    try:
+        picks = json.loads((ROOT / 'config' / 'llm_roles.json').read_text('utf-8-sig')).get('selections') or {}
+    except Exception:
+        return {}
+    out = {}
+    for role, key in picks.items() if isinstance(picks, dict) else ():
+        if isinstance(key, str) and ':ollama:' in key:
+            out.setdefault(key.split(':ollama:', 1)[1], []).append(str(role))
+    return out
+
+
+def ollama_base():
+    """The Ollama server the brain uses: config/ollama.json base_url (Setup → Brain), else the local default."""
+    try:
+        url = str(json.loads((ROOT / 'config' / 'ollama.json').read_text('utf-8-sig')).get('base_url') or '')
+    except Exception:
+        url = ''
+    url = url.strip().rstrip('/')
+    return url if re.fullmatch(r'https?://[A-Za-z0-9._\-\[\]]+(?::\d{1,5})?', url) else OLLAMA_DEFAULT
+
+
+def ollama_checks():
+    """[(level, name, detail)] when a role runs on Ollama: the server answers (GET /api/version) and every model in
+    use is pulled (GET /api/tags). Nothing when no role uses Ollama."""
+    models = ollama_roles()
+    if not models:
+        return []
+    base = ollama_base()
+    version = http_json(base + '/api/version', timeout=3)
+    if not isinstance(version, dict) or '_text' in version:
+        roles = sorted({r for rs in models.values() for r in rs})
+        return [('err', 'Ollama', f'not answering at {base} — start Ollama (or fix its address on Setup → Brain); '
+                                  f'{", ".join(roles)} run{"s" if len(roles) == 1 else ""} on it')]
+    tags = http_json(base + '/api/tags', timeout=5)
+    pulled = {str(m.get('name') or m.get('model') or '') for m in (tags or {}).get('models') or [] if isinstance(m, dict)} \
+        if isinstance(tags, dict) else set()
+    out = [('ok', 'Ollama', f"{version.get('version') or '?'} at {base}")]
+    for model, roles in models.items():
+        if model in pulled:
+            out.append(('ok', f'Ollama model {model}', f'pulled · {", ".join(roles)}'))
+        else:
+            out.append(('err', f'Ollama model {model}', f'not pulled — ollama pull {model} ({", ".join(roles)} '
+                                                       f'run{"s" if len(roles) == 1 else ""} on it)'))
+    return out
+
+
+def her_clock(zone_info=None):
+    """(level, detail) for her clock: config/build_f.json "timezone". The brain needs a time-zone database to start at
+    all (it builds its fallback zone, Asia/Tokyo, at import), and Windows has none of its own: the tzdata package
+    (brain/requirements.txt) is it. zone_info: zoneinfo.ZoneInfo (tests pass a stand-in)."""
+    if zone_info is None:
+        from zoneinfo import ZoneInfo as zone_info
+    try:
+        zone = str(json.loads((ROOT / 'config' / 'build_f.json').read_text('utf-8-sig')).get('timezone') or 'Asia/Tokyo')
+    except Exception as error:
+        return 'warn', f'config/build_f.json cannot be read ({error}) — the brain falls back to Asia/Tokyo'
+    try:
+        now = datetime.now(zone_info(zone))
+        return 'ok', f'{zone} · {now:%a %H:%M} {now.tzname()}'
+    except Exception as error:
+        problem = error
+    try:
+        zone_info('Asia/Tokyo')
+    except Exception:
+        python = shown(sys.executable)
+        return 'err', (f'{python} has no time-zone database (the tzdata package), so the brain cannot start — run the '
+                       f'setup again ({SETUP_CORE}), or {python} -m pip install tzdata')
+    return 'warn', f'build_f.json timezone {zone!r} is not a time zone ({problem}) — the brain falls back to Asia/Tokyo'
+
+
+def messengers_port(cfg):
+    """The Discord / Telegram service's port: settings.json "messengers_port" (default 5215)."""
+    try:
+        return int(cfg.get('messengers_port') or 5215)
+    except (TypeError, ValueError):
+        return 5215
+
+
+def own_pids(procs):
+    """pids of this folder's running OpenAmika: its core scripts by path on the command line (as grace_cleanup and
+    Stop_OpenAmika.ps1 find them) and the services this folder's launcher recorded in logs/instance.json."""
+    pids = {p['pid'] for p in procs if p['cmd'] and any(str(ROOT / s).lower() in p['cmd'].lower() for s in CORE_SCRIPTS)}
+    recorded = []
+    try:
+        if INSTANCE.exists():
+            recorded = json.loads(INSTANCE.read_text('utf-8')).get('processes') or []
+    except Exception:
+        pass
+    by_pid = {p['pid']: p for p in procs}
+    for entry in recorded:
+        live = by_pid.get(int(entry.get('pid') or 0)) if isinstance(entry, dict) else None
+        exe = str(entry.get('exe') or '').lower() if live else ''
+        if live and exe and (live['exe'].lower() == exe or exe in live['cmd'].lower()):
+            pids.add(live['pid'])
+    return pids
 
 
 def grace_cleanup(procs):
@@ -682,6 +785,9 @@ def agent_services(tools):
 
 # ── her voice server, her voice and her Live2D model: file checks only (nothing heavy is imported) ───────────
 SETUP_CORE = r'powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1'
+# Windows' "The filename or extension is too long" (error 206; localized, also inside a DLL load failure): a folder path
+# too long for what lies deep in the environments. Only a shorter folder fixes it (scripts/setup_tts.py too_long_hint).
+TOO_LONG = re.compile(r'(?i)filename or extension is too long|winerror 206|ファイル名または拡張子が長すぎます|文件名或扩展名太长')
 TTS_ENGINE = ROOT / 'vendor' / 'tts-engine'
 TTS_PRETRAINED = ('chinese-hubert-base/pytorch_model.bin', 'chinese-roberta-wwm-ext-large/pytorch_model.bin',
                   'sv/pretrained_eres2netv2w24s4ep4.ckpt', 'fast_langdetect/lid.176.bin')
@@ -758,8 +864,18 @@ def voice_checks(cfg, services):
     missing = [] if not local else (
         ['GPT-SoVITS'] if not (gsv / 'TTS_infer_pack' / 'TTS.py').is_file() else
         ['its pretrained models'] if any(not (gsv / 'pretrained_models' / p).is_file() for p in TTS_PRETRAINED) else [])
+    voice = str(cfg.get('tts_character') or 'MekaHime_Amika')
     if http_json(tts_url + '/ping') is not None:
-        out.append(('ok', 'TTS (voice)', f'{tts_url} answers · voice {cfg.get("tts_character", "?")}'))
+        # something answers on her voice port: it is used as it is, so it must be a voice server that has her voice
+        listing = http_json(tts_url + '/api/characters')
+        voices = listing.get('characters') if isinstance(listing, dict) else None
+        if isinstance(voices, dict) and voice in voices:
+            out.append(('ok', 'TTS (voice)', f'{tts_url} answers · voice {voice}'))
+        else:
+            port = urlsplit(tts_url).port or tts_url
+            out.append(('err', 'TTS (voice)', f'port {port} answers but has no voice {voice} (another voice server, '
+                                              f"OpenSakura's for one?) — stop it, or move this one to another port: "
+                                              f'tts_url and services.tts (--port, health) in settings.json'))
     elif tts is None:
         out.append(('warn', 'TTS (voice)', f'nothing answers at {tts_url} and no services.tts in settings.json — she will not speak'))
     elif local and not exe_ok:
@@ -771,7 +887,7 @@ def voice_checks(cfg, services):
     else:
         out.append(('err', 'TTS (voice)', f'not running and its command is missing: {tts.cmd[0]}'))
     if local:
-        level, detail = voice_folder(TTS_ENGINE / 'Speakers' / str(cfg.get('tts_character') or 'MekaHime_Amika'))
+        level, detail = voice_folder(TTS_ENGINE / 'Speakers' / voice)
         out.append((level, 'her voice', detail if level == 'ok' else f'{detail} — run {fix} (type yes to accept her license)'))
     level, detail = live2d_models()
     out.append((level, 'Live2D model', detail if level == 'ok' else
@@ -875,23 +991,23 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
         report.add('warn', 'API keys', 'no OpenRouter key yet — paste it in the first-run wizard on the Use page (or put '
                                        'it after OPENROUTER_API_KEY= in brain/.env); until then she cannot answer. '
                                        'Fully local: switch the roles to Ollama on Setup → Brain')
-    try:
-        from zoneinfo import ZoneInfo
-        build_f = json.loads((ROOT / 'config' / 'build_f.json').read_text('utf-8-sig'))
-        zone = str(build_f.get('timezone') or 'Asia/Tokyo')
-        now = datetime.now(ZoneInfo(zone))
-        report.add('ok', 'her clock', f'{zone} · {now:%a %H:%M} {now.tzname()}')
-    except Exception as error:
-        report.add('warn', 'her clock', f'build_f.json timezone problem ({error}) — the brain falls back to Asia/Tokyo')
+    for level, name, detail in ollama_checks():
+        report.add(level, name, detail)
+    level, detail = her_clock()
+    report.add(level, 'her clock', detail)
     taken = listeners()
     names = {p['pid']: p['name'] for p in procs}
     unreadable = {p['pid'] for p in procs if not p['cmd']}      # a medium-integrity process cannot read an elevated one's command line
+    ours = own_pids(procs)
     for label, port in (('brain port', cfg.get('brain_port')), ('web/speech port', cfg.get('chat_port')),
-                        ('embedder port', (emb or {}).get('port')), ('vision port', (vis or {}).get('port'))):
+                        ('embedder port', (emb or {}).get('port')), ('vision port', (vis or {}).get('port')),
+                        ('messengers port', messengers_port(cfg))):
         if port is None:
             continue
         pid = taken.get(int(port))
-        if pid and names.get(pid, '').lower().startswith('python') and pid in unreadable:
+        if pid and pid in ours:
+            report.add('ok', label, f'{port} held by this OpenAmika (running)')
+        elif pid and names.get(pid, '').lower().startswith('python') and pid in unreadable:
             report.add('err', label, f'{port} is held by pid {pid} (python.exe) started from an administrator window, which this '
                                      f'launcher cannot see into or stop — close that window, or run Stop_OpenAmika.bat as administrator, then start again')
         elif pid:
@@ -963,7 +1079,7 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
                    f'IoT on from the Tools page to read and accept docs/IOT_DISCLAIMER.md')
     if deep:
         for key, packages in (
-            ('brain_python', ['flask', 'flask_cors', 'flask_socketio', 'requests', 'dotenv', 'google.genai']),
+            ('brain_python', ['flask', 'flask_cors', 'flask_socketio', 'requests', 'dotenv', 'google.genai', 'tzdata']),
             ('speech_python', ['torch', 'torchaudio', 'soundfile', 'numpy', 'fastapi', 'uvicorn', 'funasr', 'modelscope', 'silero_vad', 'socketio', 'aiohttp', 'multipart']),
         ):
             code = ('import importlib.util; names=' + repr(packages) +
@@ -985,9 +1101,15 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
             except (OSError, subprocess.SubprocessError) as error:
                 report.add('err', label, f'could not run {block["python"]}: {error} — run {SETUP_CORE}')
                 continue
-            text = (result.stdout or result.stderr or '').strip()[-240:] or 'ok'
+            # its last line says it all (a traceback ends with the error); long paths are cut at the end, not the start
+            lines = [ln.strip() for ln in (result.stdout or result.stderr or '').splitlines() if ln.strip()]
+            text = fit(lines[-1], 240) if lines else 'ok'
             if result.returncode != 0:
-                report.add('err', label, f'{text} — run {SETUP_CORE}')
+                if TOO_LONG.search(result.stdout + result.stderr):
+                    report.add('err', label, f'{text} — the folder path is too long for Windows: move OpenAmika to a '
+                                             'short folder such as C:\\OpenAmika and run the setup there')
+                else:
+                    report.add('err', label, f'{text} — run {SETUP_CORE}')
             elif 'not cached yet' in text:
                 report.add('warn', label, f'{text} (or run {SETUP_CORE} to download it now)')
             else:
@@ -1091,6 +1213,7 @@ def plain_summary(state):
 # ── main ─────────────────────────────────────────────────────────────────────────────────
 def core_services(cfg, emb, vis):
     ports = [int(cfg['brain_port']), int(cfg['chat_port'])]
+    texts = f'http://127.0.0.1:{messengers_port(cfg)}'          # the Discord / Telegram service
     env = dict(PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1',
                HANE_HOST='127.0.0.1', HANE_PORT=str(ports[0]),
                AMIKA_CHAT_URL=f'http://localhost:{ports[1]}',
@@ -1098,7 +1221,8 @@ def core_services(cfg, emb, vis):
                AMIKA_LOCAL_MODEL_URL=cfg['local_model_url'],
                YUMEHA_HOST='127.0.0.1', YUMEHA_PORT=str(ports[1]),
                YUMEHA_MODEL=str(ROOT / 'speech/models'), YUMEHA_DEVICE=cfg['speech_device'],
-               AMIKA_TTS_URL=cfg['tts_url'], AMIKA_TTS_CHARACTER=cfg['tts_character'])
+               AMIKA_TTS_URL=cfg['tts_url'], AMIKA_TTS_CHARACTER=cfg['tts_character'],
+               AMIKA_MESSENGERS_PORT=str(messengers_port(cfg)), AMIKA_MESSENGERS_URL=texts)
     if emb:
         env['AMIKA_EMBEDDING_URL'] = f"http://127.0.0.1:{int(emb['port'])}"
     if vis:
@@ -1127,8 +1251,8 @@ def core_services(cfg, emb, vis):
                        url=f'http://localhost:{ports[1]}'))
     # text channels (Discord / Telegram bots): its light says which bots are online, or that none is set up yet
     out.append(Service('messengers', [cfg['speech_python'], '-u', str(ROOT / 'messengers/service.py')], cwd=ROOT / 'messengers',
-                       env=env, health='http://127.0.0.1:5215/health', expect_app=True, timeout=60, kind='core',
-                       url='http://127.0.0.1:5215', live_light=True))
+                       env=env, health=f'{texts}/health', expect_app=True, timeout=60, kind='core',
+                       url=texts, live_light=True))
     return out
 
 
@@ -1163,7 +1287,8 @@ def main():
                 holder[key] = str(resolve(holder[key]))
     emb = embedder_settings(cfg)
     vis = vision_settings(cfg)
-    ports = ([int(cfg['brain_port']), int(cfg['chat_port'])] + ([int(emb['port'])] if emb else []) + ([int(vis['port'])] if vis else []))
+    ports = ([int(cfg['brain_port']), int(cfg['chat_port']), messengers_port(cfg)] + ([int(emb['port'])] if emb else [])
+             + ([int(vis['port'])] if vis else []))
     if len(set(ports)) != len(ports) or any(not 1024 <= p <= 65535 for p in ports):
         raise RuntimeError('Use distinct ports between 1024 and 65535.')
     tools, tools_error = load_tools()

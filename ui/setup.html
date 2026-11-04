@@ -61,13 +61,14 @@
       </div>
       <p class="card-hint">
         Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a>, then
-        <code>ollama pull qwen3:14b</code> (any chat model works). One model for all four roles keeps the GPU from
-        swapping models. Thinking is off for speed except in the reflection role; the context window is set to 16k so
-        her prompts fit. <b>Memory:</b> the model needs free GPU memory next to her speech, voice and vision services
-        (a 7B model wants about 5 GB; a 14B about 10 GB) — if Ollama says it cannot fit, pick a smaller model, turn
-        vision off in <code>settings.json</code>, or point the address at a second PC running Ollama. Her memory search
-        already runs locally — with Ollama, nothing leaves your computer. In <b>Professional</b> mode you can mix:
-        a local model for some roles, OpenRouter for others.
+        <code>ollama pull qwen3:4b</code>, press <b>Detect models</b>, pick it and press <b>Use this model</b> (any
+        chat model works). <b>Memory:</b> the model needs free GPU memory next to her ears, memory and voice:
+        <code>qwen3:4b</code> fits next to her on a 12–16 GB card (on 16 GB with her eyes off:
+        <code>"vision": {"enabled": false}</code> in <code>settings.json</code>); bigger models need a second GPU, or
+        Ollama on another PC (put its address above). One model for all four roles keeps the GPU from swapping
+        models. Thinking is off for speed except in the reflection role; the context window is set to 16k so her
+        prompts fit. Her memory search already runs locally — with Ollama, nothing leaves your computer. In
+        <b>Professional</b> mode you can mix: a local model for some roles, OpenRouter for others.
       </p>
     </div>
     <div data-pro>

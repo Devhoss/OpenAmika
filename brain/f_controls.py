@@ -34,7 +34,7 @@ def install_controls(g, meter):
     def action_request(action):
         request = g['request']
         if request.headers.get('Origin') or request.headers.get('X-Build-F-Action') != action:
-            raise PermissionError('Use the Build F website for this action.')
+            raise PermissionError('Use the OpenAmika page for this action.')
         value = request.get_json(silent=True) if request.is_json else None
         if not isinstance(value, dict):
             raise ValueError('A JSON object is required.')

@@ -75,7 +75,7 @@ class ShippedSettingsTests(unittest.TestCase):
 
     def test_ports_are_distinct(self):
         cfg = json.loads((ROOT / "settings.example.json").read_text("utf-8"))
-        ports = [cfg["brain_port"], cfg["chat_port"], cfg["embedder"]["port"], cfg["vision"]["port"]]
+        ports = [cfg["brain_port"], cfg["chat_port"], cfg["messengers_port"], cfg["embedder"]["port"], cfg["vision"]["port"]]
         self.assertEqual(len(set(ports)), len(ports))
 
     def test_shipped_identity_is_neutral(self):

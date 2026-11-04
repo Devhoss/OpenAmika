@@ -1281,7 +1281,7 @@ registerProcessor('pcm-pusher', PCMPusher);`;
         const olUrl = el("input", { type: "text", placeholder: "http://127.0.0.1:11434", autocomplete: "off" });
         const olStatus = el("span", { class: "card-hint", text: "" });
         const olSelect = el("select", {});
-        const olNote = el("p", { class: "hint", text: "Install Ollama from ollama.com, pull a chat model (ollama pull qwen3:14b), press Detect, pick it, and she runs entirely on this computer — her memory search already does. The model needs free GPU memory next to her speech and voice services (about 5 GB for a 7B model); if Ollama says it cannot fit, pick a smaller one." });
+        const olNote = el("p", { class: "hint", text: "Install Ollama from ollama.com, pull a chat model (ollama pull qwen3:4b), press Detect models, pick it, press Use this model, and she runs entirely on this computer — her memory search already does. qwen3:4b fits next to her ears, memory and voice on a 12–16 GB card (on 16 GB with her eyes off); bigger models need a second GPU, or Ollama on another PC (put its address above)." });
         const useBtn = button("Use this model", async () => {
           const model = olSelect.value;
           if (!model) { toast("Detect models first.", true); return; }
@@ -1310,7 +1310,7 @@ registerProcessor('pcm-pusher', PCMPusher);`;
           detect.disabled = true; olStatus.textContent = "asking Ollama…";
           try {
             const r = await postAction("/api/build_f/ollama/detect", "ollama-detect", { base_url: olUrl.value.trim() });
-            toast((r.models || []).length ? (r.models || []).length + " local model(s) found." : "Ollama answered, but has no models: ollama pull qwen3:14b", !(r.models || []).length);
+            toast((r.models || []).length ? (r.models || []).length + " local model(s) found." : "Ollama answered, but has no models: ollama pull qwen3:4b", !(r.models || []).length);
             await loadOllamaPanel();
           } catch (error) { olStatus.textContent = String(error.message || error); toast(String(error.message || error), true); }
           finally { detect.disabled = false; }

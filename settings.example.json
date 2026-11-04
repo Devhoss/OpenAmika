@@ -4,6 +4,7 @@
   "speech_python": "envs\\speech\\Scripts\\python.exe",
   "brain_port": 5202,
   "chat_port": 53000,
+  "messengers_port": 5215,
   "local_model_url": "http://127.0.0.1:11434/v1/chat/completions",
   "speech_device": "cuda:0",
   "tts_url": "http://127.0.0.1:8002",
