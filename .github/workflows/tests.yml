@@ -1,7 +1,9 @@
 name: tests
 
-# The offline test suite (README → Tests): no GPU, no models, no keys. Replay tests that need MekaHime's archived
-# corpora skip themselves; tests marked "live" need a running stack and are deselected.
+# The offline test suite (README_IF_YOU_ARE_AI_AGENT.md, section 10): no GPU, no models, no keys. Replay tests that
+# need MekaHime's archived corpora skip themselves. -k "not live" deselects every test whose name contains "live" (a
+# substring match): only a test that needs a running stack may be named so (test_live_*; none today), and
+# tests/test_ci_filter.py keeps the word out of every other test name.
 on:
   push:
     branches: [main]

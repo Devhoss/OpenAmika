@@ -135,6 +135,9 @@ class Session:
     def _reset_tts_for_new_turn(self):
         self._tts_pending_play.clear()
 
+    def _surface_last_item(self, kind):     # DialogSession's: is this the surface's final audio (none queued here)
+        return False
+
     async def _send(self, event):
         self.events.append(event)
 
@@ -234,7 +237,7 @@ class WipeProxyTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(socket.closed)
         self.assertIn('service control is in progress', socket.messages[0]['message'])
 
-    async def test_ordinary_audio_marked_pending_before_browser_delivery(self):
+    async def test_ordinary_audio_marked_pending_before_the_browser_gets_it(self):
         cls = next(n for n in self.tree.body if isinstance(n, ast.ClassDef) and n.name == 'DialogSession')
         method = copy.deepcopy(next(n for n in cls.body if isinstance(n, ast.AsyncFunctionDef) and n.name == '_on_tts_event'))
         self.ns.update(base64=base64, _now_ms=lambda: 1, pause_after=lambda *a: 0,

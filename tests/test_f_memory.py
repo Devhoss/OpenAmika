@@ -67,7 +67,8 @@ class Callbacks:
 class MemoryRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.folder = Path(self.temp.name)
+        # resolved: when TEMP is an 8.3 short path (a long user name), the store resolves its folder to the long name
+        self.folder = Path(self.temp.name).resolve()
         self.callbacks = Callbacks()
 
     def tearDown(self):
@@ -536,7 +537,7 @@ class MemoryRuntimeTests(unittest.TestCase):
         self.assertIsNone(memory.status()["persist_due_in_s"])
         self.assertEqual(len(CandidateF.reload(self.folder / "state.json").facts), 1)
 
-    def test_vectors_live_in_a_binary_sidecar_and_round_trip(self):
+    def test_vectors_sit_in_a_binary_sidecar_and_round_trip(self):
         values = [0.1 * (i % 7) + 0.01 for i in range(DIMENSIONS)]             # not float32-exact on purpose
         norm = sum(v * v for v in values) ** 0.5
         unit = [v / norm for v in values]

@@ -545,7 +545,7 @@ def test_a_relay_turn_the_user_talked_over_is_queued_again(wired):
     assert f_tools._DELIVERIES == [] and len(f_tools._RELAY_QUEUE) == 0
 
 
-def test_delivery_waits_while_the_turn_is_still_unspoken_and_gives_up_eventually(wired):
+def test_handover_waits_while_the_turn_is_still_unspoken_and_gives_up_eventually(wired):
     history = {"tid-1": {"turn_id": "tid-1", "protected": False}}
     wired["g"]["_find_turn"] = lambda tid: history.get(tid)
     f_tools._relay("（note）", "", "en")
@@ -558,7 +558,7 @@ def test_delivery_waits_while_the_turn_is_still_unspoken_and_gives_up_eventually
     assert f_tools._DELIVERIES == [] and len(f_tools._RELAY_QUEUE) == 0
 
 
-def test_without_history_access_delivery_tracking_is_inert(wired):
+def test_without_history_access_handover_tracking_is_inert(wired):
     f_tools._relay("（note）", "", None)
     f_tools._check_deliveries()
     assert len(f_tools._DELIVERIES) == 1                     # nothing known, nothing re-queued
@@ -664,7 +664,7 @@ def test_a_queued_relay_is_dropped_once_she_told_him(wired):
     assert wired["relays"] == []                             # nothing left to say
 
 
-def test_a_spoken_relay_turn_marks_the_result_delivered(wired):
+def test_a_spoken_relay_turn_marks_the_result_handed_over(wired):
     history, _ = _history_backed(wired)
     _job()
     wired["hub"].replies[("hermes", "status")] = {"job": "j1", "state": "done", "step": "", "cursor": 5, "events": [],

@@ -144,7 +144,7 @@ class FakeService:
         return self.last
 
 
-def test_outbox_runs_one_turn_and_protects_after_the_first_delivery():
+def test_outbox_runs_one_turn_and_protects_after_the_first_send():
     async def scenario():
         svc = FakeService()
         chat = FakeChat()
@@ -169,7 +169,7 @@ def test_outbox_runs_one_turn_and_protects_after_the_first_delivery():
     asyncio.run(scenario())
 
 
-def test_outbox_delivers_a_proactive_turn_to_her_last_chat():
+def test_outbox_sends_a_proactive_turn_to_her_last_chat():
     async def scenario():
         last = FakeChat("her last chat")
         svc = FakeService(last=last)
