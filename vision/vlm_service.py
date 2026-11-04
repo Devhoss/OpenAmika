@@ -20,6 +20,7 @@ Ollama; these run on one consumer GPU next to the rest of the stack):
 
 Launch (normally done by launch.py from the `vision` block in settings.json):
     python vlm_service.py --port 8014 --feed-url ws://127.0.0.1:53000/ws/vlm_feed
+    python vlm_service.py --download --model qwen3-vl-2b     # fetch the weights now (scripts/setup_core.py)
 """
 from __future__ import annotations
 
@@ -351,6 +352,24 @@ class InferenceLoop:
 
 # ---------------------------------------------------------------------------
 
+def download(key: str) -> int:
+    """Put a model into the Hugging Face cache now (scripts/setup_core.py), so the first start does not wait for it:
+    the repository's files (no ONNX / GGUF variants), then its processor is loaded once from the cache as a check."""
+    repo = MODELS[key][0]
+    t0 = time.time()
+    try:
+        from huggingface_hub import snapshot_download
+        path = snapshot_download(repo, ignore_patterns=["onnx/*", "*.onnx", "*.onnx_data", "*.gguf", "*.msgpack", "*.h5",
+                                                        "*.ot", "*.tflite"])
+        from transformers import AutoProcessor
+        AutoProcessor.from_pretrained(path)
+    except Exception as error:  # noqa: BLE001  (reported in one line for the setup summary)
+        print(f"[vlm] download failed: {type(error).__name__}: {str(error)[:300]}", flush=True)
+        return 1
+    print(f"[vlm] {repo} is in the Hugging Face cache ({path}, {time.time() - t0:.0f} s)", flush=True)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8014)
@@ -363,7 +382,12 @@ def main():
                         help="mean abs diff on a 64x48 gray signature; below = skip")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--check", action="store_true", help="verify imports only")
+    parser.add_argument("--download", action="store_true",
+                        help="download the model into the Hugging Face cache and check that its processor loads, then exit")
     args = parser.parse_args()
+
+    if args.download:
+        raise SystemExit(download(args.model))
 
     if args.check:
         import importlib.util

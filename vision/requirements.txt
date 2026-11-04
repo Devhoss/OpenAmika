@@ -1,7 +1,10 @@
-# Vision service (vision/vlm_service.py), optional: gives her eyes. Install into its own environment,
-# with a CUDA build of torch first (https://pytorch.org/get-started/locally/), e.g. for RTX 50-series:
-#   pip install torch --index-url https://download.pytorch.org/whl/cu128
-# Tested with: torch 2.10 (cu128), transformers 5.3, accelerate 1.13. Qwen3-VL needs transformers >= 4.57.
+# Vision service (vision/vlm_service.py): her eyes. scripts/setup_core.py installs it into envs/vision (on a GPU with
+# 16 GB or more, or with --vision on): first torch + torchvision from the PyTorch index, then this file, e.g. for
+# RTX 20-50 series:
+#   pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
+# Tested with: torch 2.10 + torchvision 0.25 (cu128), transformers 5.3, accelerate 1.13. Qwen3-VL needs
+# transformers >= 4.57; its processors and qwen-vl-utils need torchvision (the build that matches torch).
+torchvision
 transformers>=4.57,<6
 accelerate
 qwen-vl-utils

@@ -2,6 +2,7 @@
 
   python launch.py                 grace cleanup → pre-flight → services → components → browser
   python launch.py --check         validate config, environments, imports and files; start nothing
+                                   (one OK / -- / !! line per check, then "result: ready" or what to fix)
   python launch.py --no-browser    same as the default, without opening the web UI
 
 The console is a single dashboard that redraws in place: one row per service. A spinning marker means
@@ -679,6 +680,105 @@ def agent_services(tools):
     return out
 
 
+# ── her voice server, her voice and her Live2D model: file checks only (nothing heavy is imported) ───────────
+SETUP_CORE = r'powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1'
+TTS_ENGINE = ROOT / 'vendor' / 'tts-engine'
+TTS_PRETRAINED = ('chinese-hubert-base/pytorch_model.bin', 'chinese-roberta-wwm-ext-large/pytorch_model.bin',
+                  'sv/pretrained_eres2netv2w24s4ep4.ckpt', 'fast_langdetect/lid.176.bin')
+AVATAR_MODELS = ROOT / 'avatar' / 'models'
+
+
+def shown(path):
+    """A path as the person types it: relative to this folder when it is inside it."""
+    try:
+        return str(Path(path).resolve().relative_to(ROOT))
+    except (ValueError, OSError):
+        return str(path)
+
+
+def setup_tts_command(cfg):
+    """The command that installs her voice and her Live2D model (scripts/setup_tts.py), as the person types it."""
+    brain = cfg.get('brain_python')
+    return f"{shown(brain) if brain and Path(brain).is_file() else 'python'} {os.path.join('scripts', 'setup_tts.py')}"
+
+
+def voice_folder(folder):
+    """(level, detail) for a voice in the voice server's Speakers/ folder: character.json, the weights it names,
+    references/emotions.json and its clips."""
+    try:
+        meta = json.loads((folder / 'character.json').read_text('utf-8-sig'))
+    except (OSError, ValueError):
+        return 'err', f'{shown(folder)} is not installed (no character.json)'
+    cid = meta.get('character_id') or folder.name
+    for key, default in (('llm_model', f'{cid}.ckpt'), ('vocoder_model', f'{cid}.pth')):
+        if not (folder / str(meta.get(key) or default)).is_file():
+            return 'err', f'{shown(folder)}: {meta.get(key) or default} is missing'
+    try:
+        table = json.loads((folder / 'references' / 'emotions.json').read_text('utf-8-sig'))
+    except (OSError, ValueError):
+        return 'err', f'{shown(folder)}: references/emotions.json is missing'
+    tags = {k: v for k, v in table.items() if not str(k).startswith('_') and isinstance(v, dict)}
+    clips = sum(1 for v in tags.values() if (folder / 'references' / str(v.get('audio', ''))).is_file())
+    if not clips:
+        return 'err', f'{shown(folder)}: no reference clips'
+    return ('ok' if clips == len(tags) else 'warn'), f'{folder.name} · {clips}/{len(tags)} emotion clips'
+
+
+def live2d_models():
+    """(level, detail) for the Live2D models she can wear (avatar/models/<name>/ with a .model3.json; an agent
+    avatar does not count). None is an error: the Use page's stage stays empty."""
+    found = []
+    for folder in sorted(AVATAR_MODELS.iterdir()) if AVATAR_MODELS.is_dir() else []:
+        if not folder.is_dir():
+            continue
+        model3 = sorted(folder.glob('*.model3.json')) or sorted(folder.rglob('*.model3.json'))
+        if not model3:
+            continue
+        try:
+            role = (json.loads((folder / 'banks.json').read_text('utf-8-sig')).get('config') or {}).get('role')
+        except (OSError, ValueError, AttributeError):
+            role = None
+        if role != 'agent':
+            found.append(f"{folder.name} ({model3[0].name}, {len(list(folder.rglob('*.motion3.json')))} motions)")
+    if not found:
+        return 'err', 'no Live2D model in avatar/models/: the stage stays empty'
+    return 'ok', ' · '.join(found)
+
+
+def voice_checks(cfg, services):
+    """[(level, name, detail)]: the voice server (installed? running?), her voice files and her Live2D model, each
+    with the command that fixes it."""
+    out = []
+    fix = setup_tts_command(cfg)
+    tts_url = str(cfg.get('tts_url') or '').rstrip('/')
+    tts = next((s for s in services if s.name == 'tts'), None)
+    local = tts is not None and Path(tts.cwd).resolve() == TTS_ENGINE.resolve()
+    exe_ok = tts is not None and (Path(tts.exe).is_file() or bool(shutil.which(tts.cmd[0])))
+    gsv = TTS_ENGINE / 'GPT-SoVITS' / 'GPT_SoVITS'
+    missing = [] if not local else (
+        ['GPT-SoVITS'] if not (gsv / 'TTS_infer_pack' / 'TTS.py').is_file() else
+        ['its pretrained models'] if any(not (gsv / 'pretrained_models' / p).is_file() for p in TTS_PRETRAINED) else [])
+    if http_json(tts_url + '/ping') is not None:
+        out.append(('ok', 'TTS (voice)', f'{tts_url} answers · voice {cfg.get("tts_character", "?")}'))
+    elif tts is None:
+        out.append(('warn', 'TTS (voice)', f'nothing answers at {tts_url} and no services.tts in settings.json — she will not speak'))
+    elif local and not exe_ok:
+        out.append(('err', 'TTS (voice)', f'her voice server is not installed — run {fix}'))
+    elif local and missing:
+        out.append(('err', 'TTS (voice)', f'her voice server is incomplete ({missing[0]} missing) — run {fix} again'))
+    elif exe_ok:
+        out.append(('warn', 'TTS (voice)', f'not running — will be started ({shown(tts.cmd[0])})'))
+    else:
+        out.append(('err', 'TTS (voice)', f'not running and its command is missing: {tts.cmd[0]}'))
+    if local:
+        level, detail = voice_folder(TTS_ENGINE / 'Speakers' / str(cfg.get('tts_character') or 'MekaHime_Amika'))
+        out.append((level, 'her voice', detail if level == 'ok' else f'{detail} — run {fix} (type yes to accept her license)'))
+    level, detail = live2d_models()
+    out.append((level, 'Live2D model', detail if level == 'ok' else
+                f'{detail} — run {fix} (her voice and her Live2D model come together)'))
+    return out
+
+
 # ── pre-flight ───────────────────────────────────────────────────────────────────────────
 class Report:
     def __init__(self, printer=None):
@@ -756,12 +856,11 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
                           ('embedder python', (emb or {}).get('python')), ('vision python', (vis or {}).get('python'))):
         if python is None:
             continue
-        report.add('ok' if Path(python).is_file() else 'err', label, python if Path(python).is_file() else f'missing: {python} — update settings.json')
+        report.add('ok' if Path(python).is_file() else 'err', label, python if Path(python).is_file() else
+                   f'missing: {python} — run {SETUP_CORE} (or fix the path in settings.json)')
     local_only = roles_all_local()
-    needed = (([] if local_only else ['brain/.env']) + ['speech/models/model.pt', 'config/word_replace.json']
-              + (['brain/embed_server.py'] if emb else []))
-    hints = {'brain/.env': 'copy .env.example to brain/.env and add your OpenRouter key',
-             'speech/models/model.pt': 'run <speech python> scripts/download_sensevoice.py (SenseVoiceSmall, ~940 MB)'}
+    needed = ['speech/models/model.pt', 'config/word_replace.json'] + (['brain/embed_server.py'] if emb else [])
+    hints = {'speech/models/model.pt': f'speech recognition model (SenseVoiceSmall, ~940 MB): run {SETUP_CORE}'}
     missing = [p for p in needed if not (ROOT / p).is_file()]
     report.add('ok' if not missing else 'err', 'required files',
                'all present' if not missing else ', '.join(f'{p} ({hints.get(p, "missing")})' for p in missing))
@@ -773,8 +872,9 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
     elif local_only:
         report.add('ok', 'API keys', 'no OpenRouter key, none needed: every role runs on Ollama (Setup → Brain)')
     else:
-        report.add('err', 'API keys', 'OPENROUTER_API_KEY missing in brain/.env — every OpenRouter call will fail '
-                                      '(add the key, or switch the roles to Ollama on Setup → Brain)')
+        report.add('warn', 'API keys', 'no OpenRouter key yet — paste it in the first-run wizard on the Use page (or put '
+                                       'it after OPENROUTER_API_KEY= in brain/.env); until then she cannot answer. '
+                                       'Fully local: switch the roles to Ollama on Setup → Brain')
     try:
         from zoneinfo import ZoneInfo
         build_f = json.loads((ROOT / 'config' / 'build_f.json').read_text('utf-8-sig'))
@@ -798,16 +898,8 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
             report.add('err', label, f'{port} is in use by pid {pid} ({names.get(pid, "?")}) — that component cannot start; change settings.json or stop it')
         else:
             report.add('ok', label, f'{port} free')
-    tts_url = str(cfg.get('tts_url') or '').rstrip('/')
-    tts_service = next((s for s in services if s.name == 'tts'), None)
-    if http_json(tts_url + '/ping') is not None:
-        report.add('ok', 'TTS (voice)', f'{tts_url} answers · voice {cfg.get("tts_character", "?")}')
-    elif tts_service:
-        exe_ok = Path(tts_service.exe).is_file() or shutil.which(tts_service.cmd[0])
-        report.add('warn' if exe_ok else 'err', 'TTS (voice)',
-                   f'not running — will be started ({tts_service.cmd[0]})' if exe_ok else f'not running and its command is missing: {tts_service.cmd[0]}')
-    else:
-        report.add('warn', 'TTS (voice)', f'nothing answers at {tts_url} and no services.tts in settings.json — she will not speak')
+    for level, name, detail in voice_checks(cfg, services):
+        report.add(level, name, detail)
     for svc in services:
         if svc.name == 'tts':
             continue
@@ -876,19 +968,30 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
         ):
             code = ('import importlib.util; names=' + repr(packages) +
                     '; missing=[n for n in names if importlib.util.find_spec(n) is None]; print(",".join(missing))')
+            if not cfg.get(key) or not Path(cfg[key]).is_file():
+                continue                              # its own row already says it is missing
             try:
                 out = subprocess.run([cfg[key], '-c', code], capture_output=True, text=True, timeout=120, creationflags=NO_WINDOW).stdout.strip()
                 report.add('ok' if not out else 'err', f'{key} imports', 'all importable' if not out else f'missing modules: {out}')
             except Exception as error:
                 report.add('err', f'{key} imports', f'could not run: {error}')
-        if emb:
-            result = subprocess.run([emb['python'], '-X', 'utf8', str(ROOT / 'brain/embed_server.py'), '--check', '--model', emb['model']],
-                                    capture_output=True, text=True, timeout=300, creationflags=NO_WINDOW)
-            report.add('ok' if result.returncode == 0 else 'err', 'embedder check', (result.stdout or result.stderr).strip()[-200:] or 'ok')
-        if vis:
-            result = subprocess.run([vis['python'], '-X', 'utf8', str(ROOT / 'vision/vlm_service.py'), '--check'],
-                                    capture_output=True, text=True, timeout=300, creationflags=NO_WINDOW)
-            report.add('ok' if result.returncode == 0 else 'err', 'vision check', (result.stdout or result.stderr).strip()[-200:] or 'ok')
+        for label, block, cmd in (('embedder check', emb, ['brain/embed_server.py', '--check', '--model', (emb or {}).get('model', '')]),
+                                  ('vision check', vis, ['vision/vlm_service.py', '--check'])):
+            if not block or not Path(block['python']).is_file():
+                continue                              # off, or its python row already says it is missing
+            try:
+                result = subprocess.run([block['python'], '-X', 'utf8', str(ROOT / cmd[0]), *cmd[1:]], capture_output=True,
+                                        text=True, encoding='utf-8', errors='replace', timeout=300, creationflags=NO_WINDOW)
+            except (OSError, subprocess.SubprocessError) as error:
+                report.add('err', label, f'could not run {block["python"]}: {error} — run {SETUP_CORE}')
+                continue
+            text = (result.stdout or result.stderr or '').strip()[-240:] or 'ok'
+            if result.returncode != 0:
+                report.add('err', label, f'{text} — run {SETUP_CORE}')
+            elif 'not cached yet' in text:
+                report.add('warn', label, f'{text} (or run {SETUP_CORE} to download it now)')
+            else:
+                report.add('ok', label, text)
     report.fold_iot()
     return report
 
@@ -1050,9 +1153,10 @@ def main():
         pass
     settings_path = ROOT / 'settings.json'
     if not settings_path.is_file():
-        raise RuntimeError('settings.json not found — copy settings.example.json to settings.json first (see README)')
+        raise RuntimeError(f'settings.json not found — run the setup first: {SETUP_CORE} (README, "Set her up"); it '
+                           'creates settings.json')
     cfg = json.loads(settings_path.read_text(encoding='utf-8-sig'))
-    # interpreter paths may be relative to this folder (e.g. envs\brain\python.exe from `conda create -p envs\brain`)
+    # interpreter paths may be relative to this folder (envs\brain\Scripts\python.exe from scripts/setup_core.py)
     for holder in (cfg, cfg.get('embedder') or {}, cfg.get('vision') or {}):
         for key in ('brain_python', 'speech_python', 'python'):
             if isinstance(holder.get(key), str) and holder[key].strip():
@@ -1068,14 +1172,19 @@ def main():
     url = f"http://localhost:{cfg['chat_port']}"
 
     if args.check:
+        color = sys.stdout.isatty()
+        marks = {'ok': 'OK', 'warn': '--', 'err': '!!'}
+
         def printer(level, name, detail):
-            print(f"  {dot(level)} {name:<22} {detail}")
-        print(f'{BOLD}{APP} pre-flight{RESET}  {ROOT}')
+            mark = marks.get(level, '--')
+            print(f"  {COLOR.get(level, '') + mark + RESET if color else mark} {name:<22} {detail}")
+        print(f'{APP} pre-flight  {ROOT}')
         report = preflight(cfg, emb, vis, tools, tools_error, services, agents, list_processes(), deep=True, printer=printer,
                            held_iot=held_iot)
         report.save()
-        print(f"  {report.count('ok')} ok · {report.count('warn')} warning(s) · {report.count('err')} problem(s)")
-        print(f'{APP} preflight {"passed" if not report.count("err") else "found problems"}. No models loaded and no API requests made.')
+        print(f"  {report.count('ok')} ok · {report.count('warn')} warning(s) · {report.count('err')} problem(s). "
+              "No models loaded and no API requests made.")
+        print('result: ready' if not report.count('err') else 'result: fix the !! lines above (-- lines are informational)')
         sys.exit(1 if report.count('err') else 0)
 
     cores = core_services(cfg, emb, vis)

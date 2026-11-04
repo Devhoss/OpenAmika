@@ -1,45 +1,57 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 MekaHime Inc.
 # SPDX-License-Identifier: MIT
-"""Install Amika's voice (the OpenAmika voice server, a MekaHime build of GPT-SoVITS) from public sources.
+"""Install Amika's voice and her Live2D model (from Hugging Face) and the OpenAmika voice server (a MekaHime build
+of GPT-SoVITS) that speaks with that voice.
 
-    python scripts/setup_tts.py                      # NVIDIA GPU on Windows / Linux (CUDA 12.8 torch)
-    python scripts/setup_tts.py --cpu                # no GPU: CPU torch (slow, for testing)
-    python scripts/setup_tts.py --accept-voice-license   # unattended: accept Amika's voice license up front
-    python scripts/setup_tts.py --skip-voice         # everything except the voice download
-    python scripts/setup_tts.py --skip-avatar        # everything except her Live2D model
+    envs\\brain\\Scripts\\python.exe scripts\\setup_tts.py   # Windows, after scripts\\setup_windows.ps1 (any Python 3.11 works)
+    python scripts/setup_tts.py --cpu                # no NVIDIA GPU: CPU torch (slow)
+    python scripts/setup_tts.py --accept-voice-license   # unattended: accept her license up front
+    python scripts/setup_tts.py --verify             # check everything file by file; download and install nothing
+    python scripts/setup_tts.py --assets-only        # only her voice and Live2D model, no voice server
+    python scripts/setup_tts.py --from-dir <folder>  # her files from a local copy of the repository (offline)
     python scripts/setup_tts.py --self-test          # also start the server once and synthesize a line
 
-What it builds in vendor/tts-engine/ (everything but main.py and the docs is git-ignored):
+First it shows her personal-use license in short and asks you to type yes (her voice and her Live2D model share one
+license), so the rest can run unattended. Then:
 
-    .venv/                  Python 3.11 venv (3.12 works, untested): torch + torchaudio 2.9.1 (cu128 / cpu) +
-                            requirements-tts.txt
-    GPT-SoVITS/             upstream RVC-Boss/GPT-SoVITS at a pinned commit (MIT), with its pretrained models
-                            (HuBERT, RoBERTa, ERes2NetV2 speaker model, G2PW, fastText language ID) and the
-                            Japanese user dictionary its front-end builds on first use
-    nltk_data/              English POS tagger + CMUdict for the English front-end
-    ffmpeg/                 ffmpeg + ffprobe for Opus output (optional: WAV works without it)
-    Speakers/MekaHime_Amika/
-                            Amika's voice from the Hugging Face repo MekaHime/MekaHime_Amika (personal-use
-                            license, accepted when the script asks; HF_TOKEN is read if set, for a private copy)
-
-It also puts Amika's Live2D model (live2d/Amika in the same repository, same license) into avatar/models/Amika/,
-where the Use page finds it (--skip-avatar leaves the stage empty: "No Live2D model yet"). At the end it checks
-that the voice has a clip for every tag OpenAmika's voice adapter (speech/voice_adapter.py) can send, and that
-settings.json starts this server (services.tts) with that voice (tts_character).
+1. Her voice and her Live2D model, from the Hugging Face repository MekaHime/MekaHime_Amika at a pinned revision,
+   file by file with the standard library (no venv needed, so a failed torch install never costs her voice or her
+   body). Every file is checked against its size and SHA-256 in scripts/MekaHime_Amika.manifest.json:
+     vendor/tts-engine/Speakers/MekaHime_Amika/   her voice: character.json, MekaHime_Amika.ckpt (GPT weights),
+                                                  MekaHime_Amika.pth (SoVITS weights), references/emotions.json and one
+                                                  clip per emotion tag (69), the README and LICENSE of the repository
+     avatar/models/Amika/                         her Live2D model (live2d/Amika in the repository), where the Use page
+                                                  finds it; a banks.json edited on the Setup page is never overwritten
+   The repository is public from OpenAmika's public release on; before that it needs a Hugging Face read token in
+   HF_TOKEN (or a saved `hf auth login`). The token goes to the Hugging Face host only and is never printed or
+   saved. HF_ENDPOINT picks a mirror, as in huggingface_hub.
+2. The voice server in vendor/tts-engine/ (everything but main.py and the docs is git-ignored):
+     .venv/          Python 3.11 venv (3.12 works, untested): torch + torchaudio 2.9.1 (cu128 / cpu) +
+                     requirements-tts.txt
+     GPT-SoVITS/     upstream RVC-Boss/GPT-SoVITS at a pinned commit (MIT), with its pretrained models (HuBERT,
+                     RoBERTa, ERes2NetV2 speaker model, G2PW, fastText language ID) and the Japanese user dictionary
+                     its front-end builds on first use
+     nltk_data/      English POS tagger + CMUdict for the English front-end
+     ffmpeg/         ffmpeg + ffprobe for Opus output (optional: WAV works without it)
+3. Checks: the voice has a clip for every tag OpenAmika's voice adapter (speech/voice_adapter.py) can send, the Live2D
+   model has every file its .model3.json names, and settings.json starts this server (services.tts) with that voice
+   (tts_character). settings.json is never edited.
 
 Needs Python 3.11 or 3.12 (scipy, onnxruntime and matplotlib at the pinned versions have no wheels for 3.10, and
 upstream's numpy<2 has none for 3.13); Linux with glibc 2.28 or newer; macOS 14 or newer on Apple Silicon.
 
-Integrity: every model and data file, the voice weights (at a pinned revision of the voice repository) and the
-Windows ffmpeg build are checked against a size and SHA-256 pinned below; a download that does not match fails at
-once instead of being retried. GPT-SoVITS is pinned by commit: git checks the objects it fetches. Without git, the
-zip GitHub serves for that commit is checked before unpacking against a pinned SHA-256 over all 282 of its files
-(see tree_digest), and the unpacked GPT_SoVITS/TTS_infer_pack/TTS.py against its own pinned SHA-256, again on
-every re-run (for a git checkout too). The Linux ffmpeg build comes from a rolling release and is checked against
-the SHA-256 GitHub lists for that file, and Python packages come from PyPI / the PyTorch index at pinned versions.
-Re-running skips what is already present and verified. A failed step is reported and the steps that do not depend
-on it still run; the summary at the end lists every step, and the exit code is non-zero if any of them failed.
+Integrity: every model and data file, every file of her voice and Live2D model (at a pinned revision of her
+repository) and the Windows ffmpeg build are checked against a size and SHA-256 pinned here or in the manifest; a
+download that does not match fails at once instead of being retried. GPT-SoVITS is pinned by commit: git checks the
+objects it fetches. Without git, the zip GitHub serves for that commit is checked before unpacking against a pinned
+SHA-256 over all 282 of its files (see tree_digest), and the unpacked GPT_SoVITS/TTS_infer_pack/TTS.py against its
+own pinned SHA-256, again on every re-run (for a git checkout too). The Linux ffmpeg build comes from a rolling
+release and is checked against the SHA-256 GitHub lists for that file, and Python packages come from PyPI / the
+PyTorch index at pinned versions. Downloads resume from .part files. Re-running skips what is already present and
+verified (hashes are cached by size and modification time), so it is also the repair: a failed step is reported, the
+steps that do not depend on it still run, the summary at the end lists every step (OK, -- skipped or optional, !!
+failed, each with its fix) and the exit code is 1 if any failed (130 after Ctrl-C).
 Only the standard library is used here; packages are installed into the venv this script creates.
 """
 from __future__ import annotations
@@ -59,6 +71,7 @@ import tarfile
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -94,7 +107,9 @@ PY_MIN, PY_MAX, PY_TESTED = (3, 11), (3, 12), (3, 11)
 GLIBC_MIN = (2, 28)               # torch 2.9.1, onnxruntime 1.31.0, soundfile 0.14.0: manylinux_2_28 wheels only
 MACOS_MIN = (14, 0)               # onnxruntime 1.31.0: one macOS wheel, macosx_14_0_arm64, and no source package
 
-HF = "https://huggingface.co"
+HF_SITE = "https://huggingface.co"                         # the pages people open (license, model card)
+HF = (os.environ.get("HF_ENDPOINT") or HF_SITE).rstrip("/")  # where files come from; HF_ENDPOINT picks a mirror, as
+                                                             # in huggingface_hub (every file is pinned by SHA-256)
 PRETRAINED_REPO, PRETRAINED_REV = "lj1995/GPT-SoVITS", "8f8857563c040d542de108a2c18b0425abd6c9c5"
 PRETRAINED = [  # path in lj1995/GPT-SoVITS == path under GPT_SoVITS/pretrained_models, size, sha256
     ("chinese-hubert-base/config.json", 1449, "c3e5060a1277e0f078cc6be9da4528a605dba6ece93018981fe2c820e5c7b103"),
@@ -125,20 +140,14 @@ FFMPEG_LINUX_ASSET = re.compile(r"ffmpeg-n(\d+)\.(\d+)-latest-linux64-gpl-\1\.\2
 
 VOICE_REPO, VOICE_ID = "MekaHime/MekaHime_Amika", "MekaHime_Amika"
 VOICE_REV = "a3934e5a83dcb0192901f69536c66b837414e822"    # 2026-11-03: v1.0, 69 emotion tags, each with its clip
-VOICE_WEIGHTS = {  # at VOICE_REV: file -> (size, sha256)
-    "MekaHime_Amika.ckpt": (155312594, "65534ce89de5c1d37e5731806ef0eccecb91aef0c7f5b05d8ee975700973edac"),
-    "MekaHime_Amika.pth": (172764966, "651759b6c5f37004ad93159018edc658d1161b639de9c24463a8cdc8f491fe50"),
-}
+# Every file of that revision with its size and SHA-256 (250 files): her voice is everything outside live2d/, her
+# Live2D model is live2d/Amika/. Update it together with VOICE_REV (--write-manifest <local copy of the repository>).
+MANIFEST = Path(__file__).resolve().with_name("MekaHime_Amika.manifest.json")
+REPO_ONLY = (".gitattributes",)                           # repository plumbing, not part of her voice
 # OpenAmika's voice adapter: its V1_IDS are every tag it can send to the voice server (checked in check_voice)
 VOICE_ADAPTER = ROOT / "speech" / "voice_adapter.py"
 # Amika's Live2D model is in the same repository (same license) under live2d/Amika; it goes to avatar/models/Amika
 AVATAR_ID, AVATAR_PATH = "Amika", "live2d/Amika"
-AVATAR_FILES = {  # at VOICE_REV: file under live2d/Amika -> (size, sha256); banks.json is not pinned (Setup edits it)
-    "AmikaV4.model3.json": (2978, "4e1783bd45f4dcb8f7a69980ad89f8574653f4e6b6673c2f0bdb6ab2c1495bee"),
-    "AmikaV4.moc3": (5829824, "d398f37daed8a0d08080c769110f6b78d1ffd07a37fa97fd5ce527d47b3e6d9a"),
-    "AmikaV4.8192/texture_00.png": (18229093, "3cab50e24a7c280da88ae57da86766311eb5460d1cb493508038946a8c48fd7f"),
-    "AmikaV4.8192/texture_01.png": (2339604, "388f74b023d1a78be4f281b8f7afb35ef4a0c21647be01a121627cd4512d6034"),
-}
 
 ROWS: list[tuple[str, str, str]] = []   # (mark, name, detail) for the final summary
 
@@ -157,6 +166,31 @@ class SetupError(RuntimeError):
 
 class IntegrityError(SetupError):
     """A complete download does not match its pinned hash: downloading it again will not help."""
+
+
+class HTTPStatusError(SetupError):
+    """A download the server refused with an HTTP status that asking again will not change (401, 403, 404, ...).
+    error_code is Hugging Face's X-Error-Code header (RepoNotFound, GatedRepo, EntryNotFound, ...) when present."""
+
+    def __init__(self, url: str, code: int, reason: str, error_code: str = "") -> None:
+        super().__init__(f"{url}: HTTP {code} {reason}")
+        self.url, self.code, self.error_code = url, code, error_code
+
+
+class SameHostAuthRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib's redirects, except that an Authorization header goes along to the same host only. Hugging Face answers
+    a file of a private repository with a redirect to its CDN (another host), which must never see the token."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        auth = req.get_header("Authorization")
+        if new is not None and auth and \
+                urllib.parse.urlsplit(newurl).netloc == urllib.parse.urlsplit(req.full_url).netloc:
+            new.add_unredirected_header("Authorization", auth)
+        return new
+
+
+OPENER = urllib.request.build_opener(SameHostAuthRedirect)
 
 
 # ---- small helpers ------------------------------------------------------------------------------
@@ -228,7 +262,8 @@ def remote_size(r: Any, have: int) -> Optional[int]:
 
 
 def fetch(url: str, dest: Path, size: Optional[int], sha: Optional[str], ver: Optional[Verified] = None,
-          headers: Optional[dict] = None, retries: int = 4, label: Optional[str] = None, resume: bool = True) -> str:
+          headers: Optional[dict] = None, retries: int = 4, label: Optional[str] = None, resume: bool = True,
+          auth: Optional[str] = None) -> str:
     """Download url -> dest through a resumable .part file, then check size and SHA-256. Returns 'present' (already
     there and verified) or 'downloaded'.
 
@@ -238,7 +273,9 @@ def fetch(url: str, dest: Path, size: Optional[int], sha: Optional[str], ver: Op
     raises IntegrityError at once, since the same address would serve the same wrong file again. The one exception
     is a download that continued a .part left by an earlier run, which may have been stale: it gets one fresh start.
     resume=False (for a file whose bytes may change between requests: a release listing, an archive GitHub builds
-    on request) never continues a .part, not even within one call."""
+    on request) never continues a .part, not even within one call. auth (a Hugging Face token) is sent as a bearer
+    Authorization header to url's own host only (see SameHostAuthRedirect). Any other HTTP error raises
+    HTTPStatusError at once."""
     if sha and size and ver is not None and ver.ok(dest, size, sha):
         return "present"
     if label or (size and size > 50e6):
@@ -259,9 +296,11 @@ def fetch(url: str, dest: Path, size: Optional[int], sha: Optional[str], ver: Op
             resumed = have > 0
             if not (size and have == size):      # a complete .part from an interrupted run needs no request
                 req = urllib.request.Request(url, headers={**UA, **(headers or {})})
+                if auth:
+                    req.add_unredirected_header("Authorization", "Bearer " + auth)
                 if have:
                     req.add_header("Range", f"bytes={have}-")
-                with urllib.request.urlopen(req, timeout=60) as r:
+                with OPENER.open(req, timeout=60) as r:
                     if have and r.status != 206:     # server ignored the range: start over
                         have, resumed = 0, False
                     announced = remote_size(r, have)
@@ -311,7 +350,7 @@ def fetch(url: str, dest: Path, size: Optional[int], sha: Optional[str], ver: Op
             if e.code == 416:                    # a stale .part the server cannot continue: start over
                 part.unlink(missing_ok=True)
             elif e.code not in RETRY_HTTP:
-                raise SetupError(f"{url}: HTTP {e.code} {e.reason}") from e
+                raise HTTPStatusError(url, e.code, str(e.reason), (e.headers or {}).get("X-Error-Code") or "") from e
             err: Exception = e
         except (urllib.error.URLError, http.client.HTTPException, OSError, SetupError) as e:
             if isinstance(e, OSError) and e.errno == errno.ENOSPC:
@@ -888,29 +927,197 @@ def ensure_ffmpeg(engine: Path, ver: Verified, keep: bool) -> None:
     row("OK ", "ffmpeg", f"{exe} ({info.split(' Copyright')[0]}, downloaded)")
 
 
-# ---- voice --------------------------------------------------------------------------------------
-HF_SNIPPET = r"""
-import os, sys
-repo, rev, dest, mode = sys.argv[1:5]
-kw = {"voice": {"ignore_patterns": ["live2d/*"]}, "avatar": {"allow_patterns": ["live2d/Amika/*"]}}[mode]
-from huggingface_hub import snapshot_download
-from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError, HfHubHTTPError
-try:
-    from huggingface_hub import get_token
-except ImportError:
-    get_token = lambda: None
-tok = os.environ.get("HF_TOKEN") or get_token()
-if tok:
-    print("[voice] using your Hugging Face token (" + ("HF_TOKEN / --hf-token" if os.environ.get("HF_TOKEN") else "`hf auth login`") + ")", flush=True)
-try:
-    snapshot_download(repo_id=repo, revision=rev, local_dir=dest, token=tok or None, **kw)
-except GatedRepoError as e:
-    print("[voice] gated:", str(e).splitlines()[0]); sys.exit(3)
-except RepositoryNotFoundError as e:
-    print("[voice] not found / not authorized:", str(e).splitlines()[0]); sys.exit(4)
-except HfHubHTTPError as e:
-    print("[voice] HTTP error:", str(e).splitlines()[0]); sys.exit(5)
-"""
+# ---- her voice and Live2D model (the Hugging Face repository MekaHime/MekaHime_Amika) ------------------------
+def load_manifest(path: Path) -> dict:
+    """The pinned file list of her repository (scripts/MekaHime_Amika.manifest.json):
+    {"repo", "revision", "files": {path in the repository: (size, sha256)}}."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        files = {str(p): (int(e[0]), str(e[1]).lower()) for p, e in data["files"].items()}
+        repo, rev = str(data["repo"]), str(data["revision"])
+    except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
+        raise SetupError(f"{path} cannot be read ({type(e).__name__}: {e}); restore it (git checkout -- scripts) and "
+                         "run this script again") from e
+    if (repo, rev) != (VOICE_REPO, VOICE_REV):
+        raise SetupError(f"{path} lists {repo}@{rev[:8]}, but this script pins {VOICE_REPO}@{VOICE_REV[:8]}: the two "
+                         "must be updated together")
+    return {"repo": repo, "revision": rev, "files": files}
+
+
+def split_assets(files: dict) -> tuple[dict, dict]:
+    """(her voice, her Live2D model) from a repository file list {path: (size, sha256)}. The voice is every file
+    outside live2d/ except the repository's own .gitattributes, keyed by its path under Speakers/<voice id>/; the model
+    is live2d/Amika/, keyed by its path under avatar/models/Amika/. Each comes in install order: the file that makes
+    the folder count as installed (character.json, the .model3.json) is last, so an interrupted download never looks
+    complete to the voice server or the Use page."""
+    prefix = AVATAR_PATH + "/"
+    voice = {p: e for p, e in files.items() if not p.startswith("live2d/") and p not in REPO_ONLY}
+    avatar = {p[len(prefix):]: e for p, e in files.items() if p.startswith(prefix)}
+    return (dict(sorted(voice.items(), key=lambda kv: (kv[0] == "character.json", kv[0]))),
+            dict(sorted(avatar.items(), key=lambda kv: (kv[0].endswith(".model3.json"), kv[0]))))
+
+
+def hf_token(explicit: Optional[str]) -> tuple[Optional[str], str]:
+    """(token, where it came from) for her repository, or (None, ""): --hf-token, HF_TOKEN (or the older
+    HUGGING_FACE_HUB_TOKEN), else the file `hf auth login` saves (HF_TOKEN_PATH, or "token" in HF_HOME, by default
+    ~/.cache/huggingface), unless HF_HUB_DISABLE_IMPLICIT_TOKEN is set. Only needed while the repository is private.
+    It is sent to the Hugging Face host only (never to the CDN it redirects to) and is never printed or written."""
+    if explicit and explicit.strip():
+        return explicit.strip(), "--hf-token"
+    for var in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        if os.environ.get(var, "").strip():
+            return os.environ[var].strip(), var
+    if os.environ.get("HF_HUB_DISABLE_IMPLICIT_TOKEN", "").strip().lower() in ("1", "true", "yes", "on"):
+        return None, ""
+    home = os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
+    try:
+        saved = Path(os.environ.get("HF_TOKEN_PATH") or os.path.join(home, "token")).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None, ""
+    return (saved, "`hf auth login`") if saved else (None, "")
+
+
+def revision_files(args: argparse.Namespace) -> dict:
+    """{path: (None, None)} for every file of another revision of her repository, from the Hub's API (--voice-revision
+    other than the pinned one): such files are not pinned, so they are not hash-checked."""
+    url = f"{HF}/api/models/{args.repo}/revision/{urllib.parse.quote(args.revision)}"
+    req = urllib.request.Request(url, headers=UA)
+    if args.token:
+        req.add_unredirected_header("Authorization", "Bearer " + args.token)
+    try:
+        with OPENER.open(req, timeout=60) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise HTTPStatusError(url, e.code, str(e.reason), e.headers.get("X-Error-Code") or "") from e
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
+        raise SetupError(f"{url}: {e}") from e
+    return {str(s["rfilename"]): (None, None) for s in data.get("siblings") or [] if s.get("rfilename")}
+
+
+def asset_files(args: argparse.Namespace, manifest: Optional[dict]) -> tuple[dict, dict]:
+    """(voice files, Live2D model files) to install: the pinned manifest at the pinned revision, else the listing of
+    the revision asked for."""
+    if args.revision != VOICE_REV:
+        return split_assets(revision_files(args))
+    if manifest is None:
+        raise SetupError("the pinned file list (scripts/MekaHime_Amika.manifest.json) could not be read; see its row")
+    return split_assets(manifest["files"])
+
+
+def copy_pinned(src: Path, dest: Path, size: Optional[int], sha: Optional[str], ver: Verified) -> None:
+    """Copy one file of a local folder (--from-dir) into place through a .part file, checked like a download."""
+    if not src.is_file():
+        raise SetupError(f"{src} is missing")
+    if size is not None and src.stat().st_size != size:
+        raise IntegrityError(f"{src} has {src.stat().st_size:,} bytes; the pinned file has {size:,}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    try:
+        shutil.copyfile(src, part)
+    except OSError as e:
+        part.unlink(missing_ok=True)
+        if e.errno == errno.ENOSPC:
+            raise SetupError(f"{dest.parent}: the disk is full") from e
+        raise SetupError(f"copying {src} failed: {e}") from e
+    if sha:
+        got = sha256_file(part)
+        if got != sha:
+            part.unlink(missing_ok=True)
+            raise IntegrityError(f"{src}: SHA-256 {got[:16]}… is not the pinned {sha[:16]}…")
+    os.replace(part, dest)
+    if size is not None and sha:
+        ver.record(dest, size, sha)
+
+
+def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str], str], args: argparse.Namespace,
+                  ver: Verified, keep: tuple[str, ...] = ()) -> dict:
+    """Bring every file of `files` ({path under dest: (size, sha256), or (None, None) when not pinned}) into dest. A
+    file already there with its pinned size and SHA-256 stays; any other one comes from Hugging Face (or HF_ENDPOINT)
+    at args.revision, or from the --from-dir folder, and is checked before it takes its place (through a .part file,
+    so an interrupted download resumes). A file named in `keep` stays as it is when present (her banks.json, which the
+    Setup page edits). With --verify nothing is fetched: what is missing or different is only listed.
+    Returns {"present", "fetched", "kept": counts, "bad": [paths]}."""
+    force = args.update_voice if what == "her voice" else args.update_avatar
+    stats: dict[str, Any] = {"present": 0, "fetched": 0, "kept": 0, "bad": []}
+    total = sum(size or 0 for size, _ in files.values())
+    done, t_last = 0, time.time()
+    for i, (rel, (size, sha)) in enumerate(files.items(), 1):
+        target = dest / Path(*rel.split("/"))
+        as_pinned = ver.ok(target, size, sha) if size is not None and sha else target.is_file()
+        if as_pinned and (not force or rel in keep):
+            stats["present"] += 1
+        elif rel in keep and target.is_file():             # edited after the install: hers to keep
+            stats["kept"] += 1
+        elif args.verify:
+            stats["bad"].append(rel)
+        else:
+            src_rel = repo_path(rel)
+            if args.from_dir:
+                copy_pinned(Path(args.from_dir).expanduser().resolve() / Path(*src_rel.split("/")), target, size, sha,
+                            ver)
+            else:
+                if not args.announced:
+                    args.announced = True
+                    where = f" (HF_ENDPOINT {HF})" if HF != HF_SITE else ""
+                    log(f"downloading {what} from {HF_SITE}/{args.repo} at revision {args.revision[:12]}{where}" +
+                        (f"; using your Hugging Face token (from {args.token_source})" if args.token else ""))
+                url = f"{HF}/{args.repo}/resolve/{args.revision}/{urllib.parse.quote(src_rel)}"
+                fetch(url, target, size, sha, None, auth=args.token)
+                if size is not None and sha:
+                    ver.record(target, size, sha)        # fetch() checked it
+            stats["fetched"] += 1
+        done += size or 0
+        if time.time() - t_last > 10 and i < len(files) and not args.verify:
+            log(f"  {what}: {i} of {len(files)} files" + (f" ({done / 1e6:,.0f} / {total / 1e6:,.0f} MB)" if total else ""))
+            t_last = time.time()
+    return stats
+
+
+def hf_refused(e: HTTPStatusError, args: argparse.Namespace) -> str:
+    """The summary row for a download Hugging Face refused: what it means and what to do, per status."""
+    repo, page = args.repo, f"{HF_SITE}/{args.repo}"
+    tok = f"your Hugging Face token (from {args.token_source})"
+    set_it = '$env:HF_TOKEN = "hf_..."' if IS_WIN else 'export HF_TOKEN=hf_...'
+    if e.code == 401 and not args.token:
+        return (f"Hugging Face refused the download (HTTP 401): {repo} is not public yet. Until it is, set HF_TOKEN to a "
+                f"read token of an account that can see it ({set_it} in this window), then run this script again")
+    if e.code == 401:
+        return (f"Hugging Face did not accept {tok} (HTTP 401): it is wrong or has expired. Set HF_TOKEN to a valid read "
+                f"token (or remove it once {repo} is public), then run this script again")
+    if e.code == 403 and e.error_code == "GatedRepo":
+        return (f"{repo} is gated (HTTP 403): accept its terms on {page} while logged in, set HF_TOKEN to a read token of "
+                "that account, then run this script again")
+    if e.code in (403, 404) and args.token and e.error_code in ("", "RepoNotFound", "GatedRepo"):
+        return (f"the account of {tok} cannot read {repo} (HTTP {e.code}): use a read token of an account that has "
+                "access, then run this script again")
+    if e.code == 404 and e.error_code == "RepoNotFound":
+        return (f"Hugging Face does not show {repo} (HTTP 404): while it is private, set HF_TOKEN to a read token of an "
+                f"account that can see it ({set_it}), then run this script again")
+    if e.code == 404:
+        name = urllib.parse.unquote(e.url.rsplit("/", 1)[-1])
+        return (f"Hugging Face has no {name} at revision {args.revision[:8]} of {repo} (HTTP 404"
+                f"{', ' + e.error_code if e.error_code else ''}): update OpenAmika (git pull) and run this script again")
+    return f"Hugging Face refused {urllib.parse.unquote(e.url)} (HTTP {e.code}); run this script again later"
+
+
+def fetch_assets(what: str, files: dict, dest: Path, repo_path: Callable[[str], str], args: argparse.Namespace,
+                 ver: Verified, keep: tuple[str, ...] = ()) -> dict:
+    """install_files with its failures worded for the summary row."""
+    try:
+        return install_files(what, files, dest, repo_path, args, ver, keep)
+    except HTTPStatusError as e:
+        if args.from_dir:
+            raise
+        raise SetupError(hf_refused(e, args)) from e
+    except IntegrityError as e:
+        src = "the folder --from-dir names" if args.from_dir else "Hugging Face"
+        raise IntegrityError(f"{e} The file from {src} is not the one OpenAmika pins; files already in place are kept. "
+                             "Run this script again; if it repeats, update OpenAmika (git pull)") from e
+    except SetupError as e:
+        if args.from_dir or "the disk is full" in str(e):
+            raise
+        raise SetupError(f"{e}. Check the internet connection and run this script again (files already downloaded "
+                         "are kept and the rest resumes)") from e
 
 
 def adapter_tags() -> Optional[tuple[list[str], set[str]]]:
@@ -935,27 +1142,27 @@ def adapter_tags() -> Optional[tuple[list[str], set[str]]]:
     return [str(x) for x in found["V1_IDS"]], {str(v) for v in found["DEFAULT_MAP"].values()}
 
 
-def check_voice(d: Path, ver: Verified) -> tuple[bool, Optional[bool], str]:
-    """(usable, weights are the pinned ones, detail); 'pinned' is None when the folder is not usable."""
+def check_voice(d: Path) -> tuple[bool, str]:
+    """(usable, detail) for a voice folder: character.json, the weights it names, references/emotions.json and the
+    clips it names, and whether every tag OpenAmika's voice adapter can send has a clip."""
     try:
         meta = json.loads((d / "character.json").read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
-        return False, None, "character.json missing"
+        return False, "character.json missing"
     cid = meta.get("character_id") or d.name
     weights = [str(meta.get(key) or default) for key, default in (("llm_model", f"{cid}.ckpt"), ("vocoder_model", f"{cid}.pth"))]
     for name in weights:
         if not (d / name).is_file():
-            return False, None, f"{name} missing"
+            return False, f"{name} missing"
     try:
         table = json.loads((d / "references" / "emotions.json").read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
-        return False, None, "references/emotions.json missing"
+        return False, "references/emotions.json missing"
     tags = {k: v for k, v in table.items() if not k.startswith("_") and isinstance(v, dict)}
-    have = sum(1 for v in tags.values() if (d / "references" / str(v.get("audio", ""))).is_file())
-    if not have:
-        return False, None, "no reference clips"
-    notes = [f"{have}/{len(tags)} emotion tags with a clip"]
     with_clip = {k.strip().lower() for k, v in tags.items() if (d / "references" / str(v.get("audio", ""))).is_file()}
+    if not with_clip:
+        return False, "no reference clips"
+    notes = [f"{len(with_clip)}/{len(tags)} emotion tags with a clip"]
     wanted = adapter_tags()
     if wanted is not None:
         ids, defaults = wanted
@@ -966,159 +1173,154 @@ def check_voice(d: Path, ver: Verified) -> tuple[bool, Optional[bool], str]:
             gone = [t for t in missing if t in defaults]
             notes.append(f"{len(missing)} of the {len(ids)} tags OpenAmika's voice adapter can send have no clip and fall back to neutral1 ({', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''})"
                          + (f", {len(gone)} of them in its default map" if gone else ""))
-    pinned = True
-    for name in weights:
-        f = d / name
-        want = VOICE_WEIGHTS.get(name)
-        got = ver.sha256(f)
-        if want is not None and f.stat().st_size == want[0] and got == want[1]:
-            continue
-        pinned = False
-        notes.append(f"{name} is not the file of revision {VOICE_REV[:8]} (SHA-256 {got[:12]}…)")
-    if pinned and len(notes) == 1:
-        notes.append(f"weights match revision {VOICE_REV[:8]}")
-    return True, pinned, "; ".join(notes)
+    return True, "; ".join(notes)
 
 
-def ask_voice_license() -> bool:
-    """Show the voice license in short on an interactive console and ask once; True when accepted."""
-    print(f"\n[voice] Amika's voice and her Live2D model ({HF}/{VOICE_REPO}) are free under MekaHime's personal-use license:\n"
-          "          - personal, hobbyist use only, and you must be 18 or older\n"
-          "          - no training, fine-tuning or distilling other models on it, no re-hosting or resale\n"
-          "          - credit MekaHime visibly when you post videos or streams with her voice\n"
-          f"          full text: {HF}/{VOICE_REPO}/blob/main/LICENSE\n", flush=True)
-    try:
-        answer = input("[voice] type yes to accept and download her voice and model (anything else skips them for now): ")
-    except (EOFError, KeyboardInterrupt):
-        print(flush=True)
-        return False
-    return answer.strip().lower() in ("yes", "y")
-
-
-def ensure_voice(engine: Path, vpy: Path, args: argparse.Namespace, ver: Verified) -> None:
-    dest = engine / "Speakers" / VOICE_ID
-    page = f"{HF}/{VOICE_REPO}"
-    name = f"voice {VOICE_ID}"
-    pinned_rev = args.voice_revision == VOICE_REV     # --voice-revision <other> downloads files the pins do not cover
-    if args.voice_from:
-        src = Path(args.voice_from).expanduser().resolve()
-        good, _, why = check_voice(src, ver)
-        if not good:
-            raise SetupError(f"--voice-from {src}: {why}")
-        try:
-            shutil.copytree(src, dest, dirs_exist_ok=True)
-        except (OSError, shutil.Error) as e:
-            raise SetupError(f"copying the voice from {src} to {dest} failed: {e}") from e
-        good, _, why = check_voice(dest, ver)
-        row("OK " if good else "!! ", name, f"{dest} (copied from {src}; {why})")
-        return
-    good, pinned, why = check_voice(dest, ver)
-    if args.skip_voice:
-        row("OK " if good else "-- ", name, f"{dest} ({why}; download skipped)" if good else
-            f"skipped (--skip-voice). Later: re-run without --skip-voice and accept her license")
-        return
-    if good and not args.update_voice:
-        if pinned is False and pinned_rev:
-            row("!! ", name, f"{dest} ({why}). Download it again with --update-voice, or keep this copy with --skip-voice")
-        else:
-            row("OK ", name, f"{dest} (existing; {why})")
-        return
-    if not args.accept_voice_license:
-        row("!! ", name, "not downloaded: her voice license was not accepted. Re-run and type yes when asked, "
-            f"or pass --accept-voice-license (terms: {page}/blob/main/LICENSE)")
-        return
-    log(f"downloading Amika's voice from {page} at revision {args.voice_revision[:12]}")
-    env = dict(os.environ)
-    if args.hf_token:
-        env["HF_TOKEN"] = args.hf_token
-    env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-    env.setdefault("HF_HUB_VERBOSITY", "error")   # failures are reported below in one line
-    p = subprocess.run([str(vpy), "-I", "-c", HF_SNIPPET, VOICE_REPO, args.voice_revision, str(dest), "voice"],
-                       env=env)
-    if p.returncode != 0:
-        msg = {3: "the repository is gated", 5: "network / HTTP error",
-               4: "repository not found; while it is private, set HF_TOKEN to a token that can read it"}.get(
-            p.returncode, f"exit code {p.returncode}")
-        row("!! ", name, f"download failed ({msg}) from {page}. Check the internet connection and re-run "
-            "this script")
-        return
-    good, pinned, why = check_voice(dest, ver)
-    bad = not good or (pinned is False and pinned_rev)
-    row("!! " if bad else "OK ", name, f"{dest} (downloaded from {VOICE_REPO}@{args.voice_revision[:8]}; {why})")
-
-
-def check_avatar(d: Path, ver: Verified) -> tuple[bool, Optional[bool], str]:
-    """(usable, the pinned files match, detail) for a Live2D model folder: its .model3.json and every file it names."""
+def check_avatar(d: Path) -> tuple[bool, str]:
+    """(usable, detail) for a Live2D model folder: its .model3.json and every file it names."""
     models = sorted(d.glob("*.model3.json")) if d.is_dir() else []
     if not models:
-        return False, None, "no .model3.json"
+        return False, "no .model3.json"
     try:
         refs = json.loads(models[0].read_text(encoding="utf-8-sig")).get("FileReferences") or {}
         need = [refs.get("Moc"), refs.get("Physics"), *(refs.get("Textures") or []),
                 *(e.get("File") for e in refs.get("Expressions") or []),
                 *(m.get("File") for group in (refs.get("Motions") or {}).values() for m in group)]
     except (OSError, ValueError, AttributeError) as e:
-        return False, None, f"{models[0].name} cannot be read ({e})"
+        return False, f"{models[0].name} cannot be read ({e})"
     missing = [str(n) for n in need if n and not (d / str(n)).is_file()]
     if missing:
-        return False, None, f"{len(missing)} file(s) the model names are missing ({', '.join(missing[:4])})"
-    pinned = all(ver.ok(d / rel, size, sha) for rel, (size, sha) in AVATAR_FILES.items())
-    detail = (f"{models[0].name}, {len(list(d.glob('*.motion3.json')))} motions, "
-              f"{len(list(d.glob('*.exp3.json')))} expressions")
-    return True, pinned, detail + ("" if pinned else f"; not the files of revision {VOICE_REV[:8]}")
+        return False, f"{len(missing)} file(s) the model names are missing ({', '.join(missing[:4])})"
+    return True, (f"{models[0].name}, {len(list(d.glob('*.motion3.json')))} motions, "
+                  f"{len(list(d.glob('*.exp3.json')))} expressions")
 
 
-def ensure_avatar(engine: Path, vpy: Path, args: argparse.Namespace, ver: Verified) -> None:
-    """Amika's Live2D model from the voice repository (same license) into avatar/models/Amika, where the Use page
-    finds it. Without it the stage says "No Live2D model yet" and everything else works."""
+LICENSE_URL = f"{HF_SITE}/{VOICE_REPO}/blob/main/LICENSE"
+
+
+def ask_voice_license() -> bool:
+    """Show the license of her voice and Live2D model in short on an interactive console and ask once."""
+    print(f"\n[voice] Amika's voice and her Live2D model ({HF_SITE}/{VOICE_REPO}) are free under MekaHime's personal-use license:\n"
+          "          - personal, non-commercial use only, and you must be 18 or older\n"
+          "          - no redistribution, re-hosting or resale of her voice, her Live2D model or their files\n"
+          "          - no training, fine-tuning or distilling other models on them\n"
+          "          - credit MekaHime visibly when you post videos or streams with her\n"
+          f"          full text: {LICENSE_URL}\n", flush=True)
+    try:
+        answer = input("[voice] type yes to accept and download her voice and Live2D model (anything else skips them for now): ")
+    except (EOFError, KeyboardInterrupt):
+        print(flush=True)
+        return False
+    return answer.strip().lower() in ("yes", "y")
+
+
+def not_accepted(args: argparse.Namespace) -> str:
+    how = ("Run this script again in a console and type yes when it asks" if not args.console else
+           "Run this script again and type yes when it asks")
+    return (f"not downloaded: her license was not accepted (one license covers her voice and her Live2D model). {how}, "
+            f"or pass --accept-voice-license once you have read it ({LICENSE_URL})")
+
+
+def files_note(stats: dict, files: dict, args: argparse.Namespace) -> str:
+    """What happened to the files, for the summary row."""
+    pinned = all(sha for _, sha in files.values())
+    origin = (f"from {args.from_dir}" if args.from_dir else f"from {args.repo}@{args.revision[:8]}")
+    checked = (f"{len(files)} files verified" if pinned else f"{len(files)} files of revision {args.revision[:8]}, "
+               "not pinned: not hash-checked")
+    if stats["fetched"]:
+        verb = "copied" if args.from_dir else "downloaded"
+        got = f"{verb} {stats['fetched']} file(s) {origin}"
+        return f"{got}; {checked}" + ("; your banks.json kept" if stats["kept"] else "")
+    return f"existing; {checked} against {args.repo}@{args.revision[:8]}" + ("; your banks.json kept" if stats["kept"] else "")
+
+
+def verify_failed(dest: Path, bad: list[str], files: dict) -> str:
+    """The --verify row for files that are missing or differ from the pins."""
+    if len(bad) == len(files):
+        return (f"{dest}: not installed yet. Run this script without --verify (it asks you to accept her license "
+                "first)")
+    return (f"{dest}: {len(bad)} of {len(files)} files missing or not the pinned ones ({', '.join(bad[:4])}"
+            f"{' ...' if len(bad) > 4 else ''}). Run this script without --verify to download them again")
+
+
+def ensure_voice(engine: Path, args: argparse.Namespace, ver: Verified, manifest: Optional[dict]) -> None:
+    """Her voice into Speakers/MekaHime_Amika: every file of her repository outside live2d/, checked file by file
+    against the pinned manifest. Needs no venv: only the standard library."""
+    dest = engine / "Speakers" / VOICE_ID
+    name = f"voice {VOICE_ID}"
+    if args.voice_from:
+        src = Path(args.voice_from).expanduser().resolve()
+        good, why = check_voice(src)
+        if not good:
+            raise SetupError(f"--voice-from {src}: {why}")
+        try:
+            shutil.copytree(src, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns("live2d", ".cache", ".git*"))
+        except (OSError, shutil.Error) as e:
+            raise SetupError(f"copying the voice from {src} to {dest} failed: {e}") from e
+        good, why = check_voice(dest)
+        row("OK " if good else "!! ", name, f"{dest} (copied from {src}, not checked against the pins; {why})")
+        return
+    installed = (dest / "character.json").is_file()
+    if args.skip_voice:
+        good, why = check_voice(dest)
+        row("OK " if good else "-- ", name, f"{dest} ({why}; not checked: --skip-voice)" if good else
+            "skipped (--skip-voice): she answers in text only until her voice is installed (run this script again "
+            "without --skip-voice)")
+        return
+    if not (installed or args.accept_voice_license or args.verify):
+        row("!! ", name, not_accepted(args))
+        return
+    files, _ = asset_files(args, manifest)
+    stats = fetch_assets("her voice", files, dest, lambda p: p, args, ver)
+    good, why = check_voice(dest)
+    if args.verify and stats["bad"]:
+        row("!! ", name, verify_failed(dest, stats["bad"], files))
+        return
+    row("OK " if good else "!! ", name, f"{dest} ({files_note(stats, files, args)}; {why})")
+
+
+def ensure_avatar(engine: Path, args: argparse.Namespace, ver: Verified, manifest: Optional[dict]) -> None:
+    """Her Live2D model (live2d/Amika in the same repository, same license) into avatar/models/Amika, where the Use
+    page finds it. A banks.json there (her emotion banks, edited on the Setup page) is never overwritten."""
     dest = Path(args.avatar_dir).expanduser().resolve()
-    page = f"{HF}/{VOICE_REPO}"
-    name = f"avatar {AVATAR_ID}"
-    pinned_rev = args.voice_revision == VOICE_REV
-    good, pinned, why = check_avatar(dest, ver)
+    name = f"Live2D model {AVATAR_ID}"
+    installed = dest.is_dir() and any(dest.glob("*.model3.json"))
     if args.skip_avatar:
-        row("OK " if good else "-- ", name, f"{dest} ({why}; download skipped)" if good else
+        good, why = check_avatar(dest)
+        row("OK " if good else "-- ", name, f"{dest} ({why}; not checked: --skip-avatar)" if good else
             "skipped (--skip-avatar): the Use page shows \"No Live2D model yet\" until a model is in avatar/models/")
         return
-    if good and not args.update_avatar:
-        row("OK " if pinned or not pinned_rev else "-- ", name, f"{dest} (existing; {why})"
-            + ("" if pinned or not pinned_rev else ". --update-avatar downloads it again"))
+    if not (installed or args.accept_voice_license or args.verify):
+        row("!! ", name, not_accepted(args))
         return
-    if not args.accept_voice_license:
-        row("-- ", name, "not downloaded: her license was not accepted (the same license covers her voice and her "
-            "Live2D model). The Use page shows \"No Live2D model yet\"; re-run and type yes to get her")
+    _, files = asset_files(args, manifest)
+    stats = fetch_assets("her Live2D model", files, dest, lambda p: f"{AVATAR_PATH}/{p}", args, ver, keep=("banks.json",))
+    good, why = check_avatar(dest)
+    if args.verify and stats["bad"]:
+        row("!! ", name, verify_failed(dest, stats["bad"], files))
         return
-    log(f"downloading Amika's Live2D model from {page} at revision {args.voice_revision[:12]}")
-    tmp = engine / "downloads" / "live2d"
-    shutil.rmtree(tmp, ignore_errors=True)
-    env = dict(os.environ)
-    if args.hf_token:
-        env["HF_TOKEN"] = args.hf_token
-    env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-    env.setdefault("HF_HUB_VERBOSITY", "error")
-    p = subprocess.run([str(vpy), "-I", "-c", HF_SNIPPET, VOICE_REPO, args.voice_revision, str(tmp), "avatar"], env=env)
-    if p.returncode != 0:
-        msg = {3: "the repository is gated", 5: "network / HTTP error",
-               4: "repository not found; while it is private, set HF_TOKEN to a token that can read it"}.get(
-            p.returncode, f"exit code {p.returncode}")
-        row("!! ", name, f"download failed ({msg}) from {page}. Check the internet connection and re-run this script")
-        return
-    src = tmp / Path(*AVATAR_PATH.split("/"))
-    good, pinned, why = check_avatar(src, ver)
-    if not good or (pinned is False and pinned_rev):
-        shutil.rmtree(tmp, ignore_errors=True)
-        row("!! ", name, f"the download from {VOICE_REPO}@{args.voice_revision[:8]} is not usable ({why})")
-        return
-    dest.mkdir(parents=True, exist_ok=True)
-    kept = (dest / "banks.json").is_file()      # emotion banks the Setup page may have edited: never overwritten
-    for f in sorted(src.rglob("*")):
-        if f.is_file() and not (kept and f.relative_to(src).as_posix() == "banks.json"):
-            (dest / f.relative_to(src)).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(f, dest / f.relative_to(src))
-    shutil.rmtree(tmp, ignore_errors=True)
-    good, pinned, why = check_avatar(dest, ver)
-    row("OK " if good else "!! ", name, f"{dest} (downloaded from {VOICE_REPO}@{args.voice_revision[:8]}; {why}"
-        + ("; your banks.json kept" if kept else "") + ")")
+    row("OK " if good else "!! ", name, f"{dest} ({files_note(stats, files, args)}; {why})")
+
+
+def write_manifest_from(folder: Path, out: Path, revision: str) -> int:
+    """--write-manifest: the pinned file list of a local copy of her repository at `revision` (maintainers, after
+    publishing a new revision): every file's size and SHA-256, written to `out`."""
+    folder = folder.expanduser().resolve()
+    files = {p.relative_to(folder).as_posix(): p for p in sorted(folder.rglob("*"))
+             if p.is_file() and not any(part.startswith(".") and part != ".gitattributes"
+                                        for part in p.relative_to(folder).parts)}
+    if "character.json" not in files or not any(f.startswith(AVATAR_PATH + "/") for f in files):
+        raise SetupError(f"{folder} does not look like her repository (character.json and {AVATAR_PATH}/ expected)")
+    lines = [f'    {json.dumps(rel, ensure_ascii=False)}: [{p.stat().st_size}, "{sha256_file(p)}"]'
+             for rel, p in sorted(files.items())]
+    old = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else {}
+    text = ("{\n" + f'  "_readme": {json.dumps(old.get("_readme", ""), ensure_ascii=False)},\n'
+            f'  "repo": {json.dumps(VOICE_REPO)},\n  "revision": {json.dumps(revision)},\n  "files": {{\n'
+            + ",\n".join(lines) + "\n  }\n}\n")
+    out.write_text(text, encoding="utf-8", newline="\n")
+    print(f"{out}: {len(files)} files of {VOICE_REPO}@{revision[:8]}. Set VOICE_REV in {Path(__file__).name} to "
+          f"{revision} as well.")
+    return 0
 
 
 # ---- verification -------------------------------------------------------------------------------
@@ -1243,7 +1445,8 @@ def check_launcher(engine: Path) -> None:
     hint = (f'settings.json needs  "tts_character": "{VOICE_ID}"  and  "services": {{"tts": '
             f'{json.dumps(block)}}}  (settings.example.json has both)')
     if not settings.is_file():
-        row("-- ", "launcher", "settings.json not found yet: copy settings.example.json to settings.json; its \"services.tts\" block starts this server on port 8002")
+        row("-- ", "launcher", "settings.json not found yet: scripts/setup_windows.ps1 creates it (or copy settings.example.json "
+            "to settings.json); its \"services.tts\" block starts this server on port 8002")
         return
     try:
         cfg = json.loads(settings.read_text(encoding="utf-8-sig"))
@@ -1277,7 +1480,12 @@ def check_launcher(engine: Path) -> None:
         row("OK ", "launcher", f"settings.json starts this server (services.tts, port from tts_url) with voice {VOICE_ID}")
 
 
-def write_manifest(engine: Path, vpy: Path, device: str, probe: dict, voice_revision: str) -> None:
+def write_install_json(engine: Path, vpy: Path, device: str, probe: dict, args: argparse.Namespace) -> None:
+    """install.json: what this install holds (commits, revisions, torch build) and when her license was accepted."""
+    try:
+        before = json.loads((engine / "install.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        before = {}
     info = {
         "installed_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "complete": not any(m.strip() == "!!" for m, _, _ in ROWS),   # every step so far succeeded
@@ -1287,10 +1495,36 @@ def write_manifest(engine: Path, vpy: Path, device: str, probe: dict, voice_revi
         "pretrained": {"repo": PRETRAINED_REPO, "revision": PRETRAINED_REV},
         "g2pw": {"repo": G2PW_REPO, "revision": G2PW_REV},
         "nltk_data": NLTK_COMMIT,
-        "voice": {"repo": VOICE_REPO, "id": VOICE_ID, "revision": voice_revision},
-        "avatar": {"repo": VOICE_REPO, "path": AVATAR_PATH, "id": AVATAR_ID, "revision": voice_revision},
+        "voice": {"repo": VOICE_REPO, "id": VOICE_ID, "revision": args.revision},
+        "avatar": {"repo": VOICE_REPO, "path": AVATAR_PATH, "id": AVATAR_ID, "revision": args.revision},
+        "license": ({"accepted": args.license_how, "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "terms": LICENSE_URL}
+                    if args.license_how else before.get("license")),
     }
     (engine / "install.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+
+
+def verify_engine(engine: Path, ver: Verified) -> None:
+    """--verify: the voice server's own files, without installing anything: its venv, GPT-SoVITS's TTS.py, and the
+    pretrained, language-ID and G2PW models by size and SHA-256 (hashes are cached, so a second check is quick)."""
+    problems = []
+    vpy = venv_python(engine)
+    if not vpy.is_file():
+        problems.append(f"{vpy.relative_to(engine)} is missing")
+    gsv = engine / "GPT-SoVITS"
+    try:
+        check_tts_py(gsv)
+    except IntegrityError:
+        problems.append(f"GPT-SoVITS is missing or not commit {GPT_SOVITS_COMMIT[:10]}")
+    pm = gsv / "GPT_SoVITS" / "pretrained_models"
+    models = [(pm / rel, size, sha) for rel, size, sha in PRETRAINED]
+    models += [(pm / "fast_langdetect" / "lid.176.bin", LANGID[1], LANGID[2]),
+               (gsv / "GPT_SoVITS" / "text" / "G2PWModel" / G2PW_ONNX[0], G2PW_ONNX[1], G2PW_ONNX[2])]
+    bad = [f.name for f, size, sha in models if not ver.ok(f, size, sha)]
+    if bad:
+        problems.append(f"{len(bad)} model file(s) missing or changed ({', '.join(bad[:3])}{' ...' if len(bad) > 3 else ''})")
+    if problems:
+        raise SetupError(f"{engine}: " + "; ".join(problems) + ". Run this script without --verify to install or repair it")
+    row("OK ", "voice server", f"{engine} (venv, GPT-SoVITS {GPT_SOVITS_COMMIT[:10]}, {len(models)} model files verified)")
 
 
 class Steps:
@@ -1329,94 +1563,135 @@ def optional_ffmpeg(engine: Path, ver: Verified, keep: bool) -> None:
         row("-- ", "ffmpeg", f"{e} (only needed for Opus output; WAV works without it)")
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Install the OpenAmika voice server (a MekaHime build of GPT-SoVITS)")
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = argparse.ArgumentParser(description="Install Amika's voice and Live2D model (from Hugging Face) and the OpenAmika "
+                                             "voice server (a MekaHime build of GPT-SoVITS)")
     ap.add_argument("--engine-dir", type=Path, default=SOURCE_ENGINE, help="default: vendor/tts-engine")
     ap.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto",
                     help="torch build: auto = CUDA 12.8 when an NVIDIA GPU is visible (Windows/Linux), else CPU")
     ap.add_argument("--cpu", action="store_true", help="same as --device cpu")
     ap.add_argument("--python", default=None, help="Python 3.11 (or 3.12) interpreter for the venv (default: the first "
                                                      "3.11 found: this one, py -3.11, python3.11; then 3.12)")
-    ap.add_argument("--skip-voice", action="store_true", help="do not download Amika's voice")
-    ap.add_argument("--voice-from", default=None, help="copy the voice from a local folder instead of Hugging Face")
-    ap.add_argument("--update-voice", action="store_true", help="download the voice again (at --voice-revision)")
-    ap.add_argument("--voice-revision", default=VOICE_REV,
-                    help=f"revision of {VOICE_REPO} (default: the pinned {VOICE_REV[:8]}, whose weights are checked "
-                         "by SHA-256)")
     ap.add_argument("--accept-voice-license", action="store_true",
                     help="accept the license of Amika's voice and Live2D model (personal use, 18+) without being "
                          "asked")
-    ap.add_argument("--skip-avatar", action="store_true", help="do not download Amika's Live2D model")
+    ap.add_argument("--verify", action="store_true",
+                    help="check her voice and Live2D model file by file (size + SHA-256) and the voice server's files; "
+                         "download and install nothing")
+    ap.add_argument("--assets-only", action="store_true",
+                    help="only her voice and Live2D model: skip the voice server install (torch, GPT-SoVITS, models)")
+    ap.add_argument("--from-dir", default=None,
+                    help="take her voice and Live2D model from a local folder laid out like the Hugging Face repository "
+                         "(offline installs); every file is still checked against the pinned list")
+    ap.add_argument("--skip-voice", action="store_true", help="do not install Amika's voice")
+    ap.add_argument("--voice-from", default=None,
+                    help="copy a voice folder you already have (character.json, weights, references/) instead")
+    ap.add_argument("--update-voice", action="store_true", help="download every file of her voice again")
+    ap.add_argument("--voice-revision", default=VOICE_REV,
+                    help=f"revision of {VOICE_REPO} (default: the pinned {VOICE_REV[:8]}, whose files are all checked "
+                         "by SHA-256; other revisions are not)")
+    ap.add_argument("--skip-avatar", action="store_true", help="do not install Amika's Live2D model")
     ap.add_argument("--update-avatar", action="store_true",
                     help="download her Live2D model again (a banks.json edited in Setup is kept)")
     ap.add_argument("--avatar-dir", default=str(ROOT / "avatar" / "models" / "Amika"),
                     help="where her Live2D model goes (default: avatar/models/Amika)")
-    ap.add_argument("--hf-token", default=None, help="Hugging Face token (optional; the public voice needs none. Also read from HF_TOKEN; only a private copy of the voice repository needs one)")
+    ap.add_argument("--hf-token", default=None,
+                    help="Hugging Face token; prefer the HF_TOKEN environment variable or `hf auth login` (a command "
+                         "line is visible to other programs). Needed only while her repository is private")
     ap.add_argument("--skip-ffmpeg", action="store_true")
     ap.add_argument("--reinstall", action="store_true", help="re-run the pip steps even if nothing changed")
     ap.add_argument("--keep-downloads", action="store_true", help="keep the zip archives in downloads/")
     ap.add_argument("--self-test", action="store_true", help="start the server once and synthesize a line")
-    args = ap.parse_args()
+    ap.add_argument("--manifest", type=Path, default=MANIFEST, help=argparse.SUPPRESS)     # tests: another pinned list
+    ap.add_argument("--write-manifest", type=Path, default=None, metavar="FOLDER",
+                    help="maintainers: write the pinned list (scripts/MekaHime_Amika.manifest.json) from a local copy of "
+                         "her repository at --voice-revision, then exit")
+    args = ap.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         try:  # file names and messages can be non-ASCII; never die on a cp1252 console or log file
             stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
         except Exception:  # noqa: BLE001
             pass
+    if args.write_manifest:
+        if args.voice_revision == VOICE_REV:
+            ap.error("--write-manifest needs --voice-revision <the new commit of the repository>")
+        return write_manifest_from(args.write_manifest, args.manifest, args.voice_revision)
+    ROWS.clear()
+    args.repo, args.revision = VOICE_REPO, args.voice_revision
+    args.console = sys.stdin.isatty()
+    args.announced = False
+    args.license_how = ""
 
     engine = args.engine_dir.expanduser().resolve()
-    log(f"OpenAmika voice setup -> {engine}  ({platform.system()} {platform.machine()}, Python {platform.python_version()})")
+    mode = " (--verify: nothing is installed)" if args.verify else " (--assets-only)" if args.assets_only else ""
+    log(f"OpenAmika voice setup -> {engine}{mode}  ({platform.system()} {platform.machine()}, Python {platform.python_version()})")
     free = disk_free_gb(engine)
-    if free is not None and free < 12:
-        log(f"WARNING: only {free:.0f} GB free; a full install needs about 9 GB")
-    if IS_WIN and len(str(engine)) > 100 and not long_paths_enabled():
+    if not args.verify and free is not None and free < (2 if args.assets_only else 12):
+        log(f"WARNING: only {free:.0f} GB free; " + ("her voice and Live2D model need about 0.5 GB" if args.assets_only
+                                                  else "a full install needs about 9 GB"))
+    if IS_WIN and not args.verify and len(str(engine)) > 100 and not long_paths_enabled():
         log(f"WARNING: {engine} is {len(str(engine))} characters long and Windows long paths are off: files deep in the "
             "venv and the GPT-SoVITS tree can pass the 260-character limit. Use a shorter folder, or enable "
             "LongPathsEnabled (HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem) and re-run")
-    voice_missing = args.update_voice or not (engine / "Speakers" / VOICE_ID / "character.json").is_file()
-    avatar_missing = not args.skip_avatar and (args.update_avatar or not any(
-        Path(args.avatar_dir).expanduser().glob("*.model3.json")))
-    if (((voice_missing and not (args.skip_voice or args.voice_from)) or avatar_missing)
-            and not args.accept_voice_license and sys.stdin.isatty()):
-        args.accept_voice_license = ask_voice_license()     # asked first, so the long install can run unattended
+    voice_dir = engine / "Speakers" / VOICE_ID
+    avatar_dir = Path(args.avatar_dir).expanduser()
+    voice_missing = args.update_voice or not (voice_dir / "character.json").is_file()
+    avatar_missing = args.update_avatar or not any(avatar_dir.glob("*.model3.json"))
+    wanted = ((voice_missing and not (args.skip_voice or args.voice_from)) or (avatar_missing and not args.skip_avatar))
+    if wanted and not args.verify:
+        if args.accept_voice_license:
+            args.license_how = "--accept-voice-license"
+        elif args.console:
+            args.accept_voice_license = ask_voice_license()   # asked first, so the long install can run unattended
+            args.license_how = "typed yes" if args.accept_voice_license else ""
+    args.token, args.token_source = (None, "") if (args.verify or args.from_dir) else hf_token(args.hf_token)
     t0 = time.time()
     rc = 0
     steps = Steps()
     try:
-        steps.run("engine files", sync_engine_files, engine)
-        device = pick_device(args)
-        log(f"torch build: {'CUDA 12.8' if device == 'cuda' else 'CPU + Apple MPS' if device == 'mac' else 'CPU'}")
+        if not (args.verify or args.assets_only):
+            steps.run("engine files", sync_engine_files, engine)
         ver = Verified(engine / ".openamika-verified.json")
-        # the venv chain: each step needs the one before it
-        vpy = steps.run("venv", ensure_venv, engine, args.python)
-        cons = steps.run("torch", ensure_torch, vpy, device, args.reinstall, needs=("venv",))
-        steps.run("packages", ensure_requirements, vpy, engine, cons, args.reinstall,
-                  needs=("engine files", "venv", "torch"))
-        # downloads that only need the standard library: they run even when the venv chain failed
-        gsv = steps.run("GPT-SoVITS", ensure_checkout, engine)
-        steps.run("pretrained models", ensure_pretrained, gsv, ver, needs=("GPT-SoVITS",))
-        steps.run("G2PW", ensure_g2pw, engine, gsv, ver, args.keep_downloads, needs=("GPT-SoVITS",))
-        steps.run("nltk data", ensure_nltk, engine, ver)
-        if args.skip_ffmpeg:
-            row("-- ", "ffmpeg", "skipped (--skip-ffmpeg; WAV output works without it)")
+        manifest = None
+        if args.revision == VOICE_REV and not (args.skip_voice and args.skip_avatar):
+            manifest = steps.run("pinned file list", load_manifest, args.manifest)
+        # her voice and Live2D model first: only the standard library, so they never wait for (or fail with) torch
+        steps.run(f"voice {VOICE_ID}", ensure_voice, engine, args, ver, manifest)
+        steps.run(f"Live2D model {AVATAR_ID}", ensure_avatar, engine, args, ver, manifest)
+        if args.assets_only:
+            pass
+        elif args.verify:
+            steps.run("voice server", verify_engine, engine, ver)
+            check_launcher(engine)
         else:
-            optional_ffmpeg(engine, ver, args.keep_downloads)
-        # the voice download runs huggingface_hub inside the venv; --voice-from only copies files
-        steps.run(f"voice {VOICE_ID}", ensure_voice, engine, vpy, args, ver,
-                  needs=() if (args.voice_from or args.skip_voice) else ("venv", "packages"))
-        steps.run(f"avatar {AVATAR_ID}", ensure_avatar, engine, vpy, args, ver,
-                  needs=() if args.skip_avatar else ("venv", "packages"))
-        probe = steps.run("imports", verify_imports, vpy, needs=("venv", "torch", "packages"))
-        steps.run("Japanese dictionary", ensure_ja_dict, vpy, gsv, needs=("venv", "packages", "GPT-SoVITS"))
-        if vpy is not None:
-            steps.run("manifest", write_manifest, engine, vpy, device, probe or {}, args.voice_revision)
-        check_launcher(engine)
-        if args.self_test:
-            if any(m.strip() == "!!" for m, _, _ in ROWS):
-                row("-- ", "self-test", "skipped: fix the !! lines first")
+            device = pick_device(args)
+            log(f"torch build: {'CUDA 12.8' if device == 'cuda' else 'CPU + Apple MPS' if device == 'mac' else 'CPU'}")
+            # the venv chain: each step needs the one before it
+            vpy = steps.run("venv", ensure_venv, engine, args.python)
+            cons = steps.run("torch", ensure_torch, vpy, device, args.reinstall, needs=("venv",))
+            steps.run("packages", ensure_requirements, vpy, engine, cons, args.reinstall,
+                      needs=("engine files", "venv", "torch"))
+            # downloads that only need the standard library: they run even when the venv chain failed
+            gsv = steps.run("GPT-SoVITS", ensure_checkout, engine)
+            steps.run("pretrained models", ensure_pretrained, gsv, ver, needs=("GPT-SoVITS",))
+            steps.run("G2PW", ensure_g2pw, engine, gsv, ver, args.keep_downloads, needs=("GPT-SoVITS",))
+            steps.run("nltk data", ensure_nltk, engine, ver)
+            if args.skip_ffmpeg:
+                row("-- ", "ffmpeg", "skipped (--skip-ffmpeg; WAV output works without it)")
             else:
-                steps.run("self-test", self_test, engine, vpy)
+                optional_ffmpeg(engine, ver, args.keep_downloads)
+            probe = steps.run("imports", verify_imports, vpy, needs=("venv", "torch", "packages"))
+            steps.run("Japanese dictionary", ensure_ja_dict, vpy, gsv, needs=("venv", "packages", "GPT-SoVITS"))
+            if vpy is not None:
+                steps.run("install record", write_install_json, engine, vpy, device, probe or {}, args)
+            check_launcher(engine)
+            if args.self_test:
+                if any(m.strip() == "!!" for m, _, _ in ROWS):
+                    row("-- ", "self-test", "skipped: fix the !! lines first")
+                else:
+                    steps.run("self-test", self_test, engine, vpy)
     except KeyboardInterrupt:
-        row("!! ", "interrupted", "Ctrl-C (re-run to resume; finished downloads are kept)")
+        row("!! ", "interrupted", "Ctrl-C (run this script again to resume; finished downloads are kept)")
         rc = 130
 
     width = max((len(n) for _, n, _ in ROWS), default=10)
@@ -1426,14 +1701,22 @@ def main() -> int:
         print(f"  {mark}{name.ljust(width)}  {detail}")
     bad = rc != 0 or any(m.strip() == "!!" for m, _, _ in ROWS)
     print("=" * 78)
+    brain = Path("envs/brain/Scripts/python.exe" if IS_WIN else "envs/brain/bin/python")
+    check = f"{brain if (ROOT / brain).is_file() else '<brain python>'} launch.py --check"
     if bad:
-        print("Fix the !! lines above and run this script again (finished steps are skipped).")
+        print("Fix the !! lines above and run this script again (finished steps are skipped)." if not args.verify else
+              "Fix the !! lines above: run this script without --verify (finished files are kept).")
+    elif args.verify:
+        print("Verified: her voice and Live2D model" + ("" if args.assets_only else " and the voice server") + " are complete.")
+    elif args.assets_only:
+        print("Done: her voice and Live2D model are in place.")
     elif IS_WIN:
-        print("Done. Next:  Start_OpenAmika.bat  (it starts this server from settings.json \"services.tts\"; "
-              "<brain python> launch.py --check shows the TTS row)")
-        print(f"Run the voice server alone:  {venv_python(engine)} {engine / 'main.py'} --port 8002")
+        print("Done. Next:  Start_OpenAmika.bat   (her voice server starts with the rest; the page opens at "
+              "http://localhost:53000)")
+        print(f"Check everything first, without starting anything:  {check}")
     else:
-        print("Done. Next:  <brain python> launch.py --check   then   <brain python> launch.py")
+        print(f"Done. Next:  {check}   then   <brain python> launch.py")
+    if not bad and not args.verify and not args.assets_only:
         print(f"Run the voice server alone:  {venv_python(engine)} {engine / 'main.py'} --port 8002")
     return rc or (1 if bad else 0)
 

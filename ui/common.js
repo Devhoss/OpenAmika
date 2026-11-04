@@ -193,8 +193,16 @@
     // TTS
     try {
       const p = await getJSON("/api/tts_probe");
-      add(p.ok ? "ok" : "err", "TTS (her voice)", p.ok ? p.url : "unreachable at " + p.url + " — start the TTS server");
+      add(p.ok ? "ok" : "err", "TTS (her voice)", p.ok ? p.url : "unreachable at " + p.url +
+        " — not installed (scripts\\setup_tts.py) or not running yet (~20 s after a start); see logs/tts.log");
     } catch (_) { add("err", "TTS (her voice)", "probe failed"); }
+    // her Live2D model: the Use page's stage needs one; scripts/setup_tts.py installs hers together with her voice
+    try {
+      const a = await getJSON("/api/avatar/models");
+      const mine = (a.models || []).filter((m) => m.role !== "agent");
+      add(mine.length ? "ok" : "err", "Live2D model", mine.length ? mine.map((m) => m.name).join(", ")
+        : "none in avatar/models/ — run scripts\\setup_tts.py (her voice and Live2D model), then reload");
+    } catch (_) { add("err", "Live2D model", "model list unavailable"); }
     // the launcher's pre-flight: whatever was not green when the stack started
     try {
       const p = await getJSON("/api/preflight");
@@ -237,7 +245,7 @@
     pop.append(el("div", { class: "head " + level }, el("span", { class: "light " + level }), el("b", { text: LEVEL_LABEL[level] })));
     const bad = health.items.filter((it) => it.level !== "ok");
     if (!bad.length) {
-      pop.append(el("p", { class: "fine", text: "Brain, speech, voice and the startup checks are all green." }));
+      pop.append(el("p", { class: "fine", text: "Brain, speech, voice, Live2D model and the startup checks are all green." }));
     } else {
       pop.append(el("p", { class: "fine", text: level === "err" ? "Something she needs is down:" : "She works, but check these:" }));
       for (const it of bad) {

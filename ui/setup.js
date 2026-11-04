@@ -38,13 +38,15 @@
       $("ttsUrlShow").textContent = p.url;
       $("ttsCharShow").textContent = p.character;
       $("ttsDot").className = "dot " + (p.ok ? "ok" : "err");
-      $("ttsDotNote").textContent = p.ok ? "reachable" : (p.error || "unreachable — install her voice (python scripts/setup_tts.py), then start OpenAmika");
+      $("ttsDotNote").textContent = p.ok ? "reachable" : (p.error || "unreachable — install her voice (scripts\\setup_tts.py), then start OpenAmika");
       setNavDot(2, p.ok ? "ok" : "err");
     } catch (_) { add("err", "TTS", "probe failed"); setNavDot(2, "err"); }
     // avatar + tools
     try {
       const a = await getJSON("/api/avatar/models");
-      add(a.models.length ? "ok" : "warn", "Live2D", a.models.length ? a.models.map((m) => m.name).join(", ") : "no models in avatar/models/ yet");
+      const mine = a.models.filter((m) => m.role !== "agent");
+      add(mine.length ? "ok" : "err", "Live2D", a.models.length ? a.models.map((m) => m.name + (m.role === "agent" ? " (agent)" : "")).join(", ")
+        + (mine.length ? "" : " — none for her: run scripts\\setup_tts.py") : "no model in avatar/models/ — run scripts\\setup_tts.py (her voice and Live2D model)");
     } catch (_) { add("err", "Live2D", "registry failed"); }
     try {
       const t = await getJSON("/api/build_f/tools");
@@ -388,7 +390,7 @@
     avatars = payload.models || [];
     $("avSimpleList").textContent = avatars.length
       ? "Installed models: " + avatars.map((m) => m.name).join(" · ")
-      : "No Live2D model installed yet — switch to Professional mode to import one.";
+      : "No Live2D model installed yet: scripts\\setup_tts.py installs hers together with her voice. Any other Cubism model works too: put its folder in avatar/models/ and reload this page.";
     const select = $("avModelSelect");
     select.replaceChildren(...(avatars.length
       ? avatars.map((m) => el("option", { value: m.id, text: m.name }))

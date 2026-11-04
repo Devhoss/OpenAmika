@@ -1,5 +1,6 @@
 # Speech gateway (speech/api.py: STT, TTS client, every web page) and the Discord/Telegram service
-# (messengers/service.py). Python 3.11. Install a CUDA build of torch + torchaudio first (see README).
+# (messengers/service.py). Python 3.11. scripts/setup_core.py installs it into envs/speech: a CUDA build of
+# torch + torchaudio first (2.10.0 from https://download.pytorch.org/whl/cu128), then this file.
 # Tested with: torch/torchaudio 2.10 (cu128), funasr 1.3.1, modelscope 1.35, silero-vad 6.2, fastapi 0.135.
 torch>=2.0
 torchaudio

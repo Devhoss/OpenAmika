@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Download the SenseVoiceSmall speech-recognition model into speech/models/ (~940 MB in total).
 
-    envs\\speech\\python.exe scripts\\download_sensevoice.py            # download what is missing, verify all
-    envs\\speech\\python.exe scripts\\download_sensevoice.py --verify   # check the files, download nothing
+    python scripts\\download_sensevoice.py            # download what is missing, verify all (scripts/setup_core.py runs it)
+    python scripts\\download_sensevoice.py --verify   # check the files, download nothing
 
 Standard library only. Every file is pinned to the SHA-256 of the official iic/SenseVoiceSmall release
 (FunAudioLLM), fetched from ModelScope first and Hugging Face as a fallback (Hugging Face does not carry

@@ -6,8 +6,9 @@ rem Stop_OpenAmika.bat) stops everything the launcher started.
 cd /d "%~dp0"
 chcp 65001 >nul
 if not exist "settings.json" (
-    echo settings.json not found. Copy settings.example.json to settings.json and point it at your
-    echo Python environments first ^(README.md, section "Install"^).
+    echo settings.json not found: set OpenAmika up first ^(README.md, "Set her up"^):
+    echo     powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1
+    echo It makes her environments and settings.json; then scripts\setup_tts.py installs her voice and Live2D model.
     pause
     exit /b 1
 )
@@ -20,9 +21,11 @@ if not defined PY (
 )
 if not exist "%PY%" (
     echo The brain python named in settings.json was not found: %PY%
-    echo Create the environments first ^(README.md, section "Install"^) or fix the path in settings.json.
+    echo Run the setup first ^(it makes the environments^):
+    echo     powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1
+    echo or fix the path in settings.json.
     pause
     exit /b 1
 )
 start "OpenAmika" "%PY%" -X utf8 "%~dp0launch.py" %*
-echo OpenAmika is starting in its own window (the web UI opens when speech is ready).
+echo OpenAmika is starting in its own window (the web UI opens when speech is ready: http://localhost:53000).

@@ -10,6 +10,7 @@ Standard library only otherwise, so it needs no FastAPI. Started by launch.py be
 
     python -X utf8 embed_server.py --port 8011                       # serve
     python -X utf8 embed_server.py --check                           # imports + cached weights, no load
+    python -X utf8 embed_server.py --download                        # fetch the weights now (scripts/setup_core.py)
 
 API (JSON):
     GET  /health                -> {"ok": true, "model", "tag", "dims", "device", "loaded_s", "requests"}
@@ -196,6 +197,23 @@ def check(model_id: str) -> int:
     return 0
 
 
+def download(model_id: str) -> int:
+    """Put the model into the Hugging Face cache now, with the same loader the server uses (on the CPU, nothing is
+    served), so the first start does not wait for it. scripts/setup_core.py runs this; a second run only re-checks."""
+    t0 = time.perf_counter()
+    try:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(model_id, device="cpu")
+        dims = getattr(model, "get_embedding_dimension", None) or model.get_sentence_embedding_dimension
+        native = int(dims() or 0)
+    except Exception as exc:  # noqa: BLE001  (reported in one line for the setup summary)
+        print(f"embed_server download failed: {type(exc).__name__}: {str(exc)[:300]}", flush=True)
+        return 1
+    print(f"embed_server download: {model_id} is in the Hugging Face cache ({native} dims, "
+          f"{time.perf_counter() - t0:.0f} s)", flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=DEFAULT_MODEL)
@@ -207,9 +225,12 @@ def main() -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8011)
     ap.add_argument("--check", action="store_true", help="verify imports and cached weights, then exit")
+    ap.add_argument("--download", action="store_true", help="download the weights into the Hugging Face cache, then exit")
     args = ap.parse_args()
     if args.check:
         return check(args.model)
+    if args.download:
+        return download(args.model)
     if os.path.isdir(args.model) or cached_snapshot(args.model):
         # weights are local: never ask the Hub (a reset connection during a HEAD request used to kill the load)
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
