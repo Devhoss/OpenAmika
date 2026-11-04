@@ -24,8 +24,9 @@ license), so the rest can run unattended. Then:
      avatar/models/Amika/                         her Live2D model (live2d/Amika in the repository), where the Use page
                                                   finds it; a banks.json edited on the Setup page is never overwritten
    The repository is public from OpenAmika's public release on; before that it needs a Hugging Face read token in
-   HF_TOKEN (or a saved `hf auth login`). The token goes to the Hugging Face host only and is never printed or
-   saved. HF_ENDPOINT picks a mirror, as in huggingface_hub.
+   HF_TOKEN (or a saved `hf auth login`). The token goes to huggingface.co only (never to the CDN it redirects to,
+   nor to a mirror) and is never printed or saved. HF_ENDPOINT picks a mirror, as in huggingface_hub; every file is
+   still checked against its pinned SHA-256.
 2. The voice server in vendor/tts-engine/ (everything but main.py and the docs is git-ignored):
      .venv/          Python 3.11 venv (3.12 works, untested): torch + torchaudio 2.9.1 (cu128 / cpu) +
                      requirements-tts.txt
@@ -110,6 +111,8 @@ MACOS_MIN = (14, 0)               # onnxruntime 1.31.0: one macOS wheel, macosx_
 HF_SITE = "https://huggingface.co"                         # the pages people open (license, model card)
 HF = (os.environ.get("HF_ENDPOINT") or HF_SITE).rstrip("/")  # where files come from; HF_ENDPOINT picks a mirror, as
                                                              # in huggingface_hub (every file is pinned by SHA-256)
+TOKEN_HOSTS = ("huggingface.co",)   # a Hugging Face token goes to these hosts (and their subdomains) only: never to a
+                                    # mirror that HF_ENDPOINT names (a mirror serves public files and needs none)
 PRETRAINED_REPO, PRETRAINED_REV = "lj1995/GPT-SoVITS", "8f8857563c040d542de108a2c18b0425abd6c9c5"
 PRETRAINED = [  # path in lj1995/GPT-SoVITS == path under GPT_SoVITS/pretrained_models, size, sha256
     ("chinese-hubert-base/config.json", 1449, "c3e5060a1277e0f078cc6be9da4528a605dba6ece93018981fe2c820e5c7b103"),
@@ -215,6 +218,41 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def token_goes_to(url: str) -> bool:
+    """True when a Hugging Face token may be sent to url's host: huggingface.co itself (TOKEN_HOSTS), not a mirror."""
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in TOKEN_HOSTS)
+
+
+SHORT_FOLDER = 100   # Windows: from a longer folder, DLLs deep in the environments fail to load (long paths on or off)
+TOO_LONG = ("filename or extension is too long", "[winerror 206]", "ファイル名または拡張子が長すぎます", "文件名或扩展名太长")
+
+
+def too_long_hint(text: str) -> str:
+    """The fix for Windows' "The filename or extension is too long" (error 206, also inside a DLL load failure), or ''.
+    Running the setup again in the same folder cannot fix it: only a shorter folder does."""
+    low = (text or "").lower()
+    if not any(mark in low for mark in TOO_LONG):
+        return ""
+    return ("the folder path is too long for Windows (\"The filename or extension is too long\"): move OpenAmika to a "
+            "short folder such as C:\\OpenAmika and run the setup there; running it again here does not help")
+
+
+def long_folder_warning(folder: Path) -> str:
+    """A warning when a Windows folder is too long for what the setup puts under it, or ''."""
+    n = len(str(folder))
+    if not IS_WIN:
+        return ""
+    if n > SHORT_FOLDER:
+        return (f"WARNING: {folder} is {n} characters long. Windows cannot load some program files (DLLs) deep in the "
+                "environments from a folder that long, even with long paths enabled (\"The filename or extension is "
+                "too long\"). Move OpenAmika to a short folder such as C:\\OpenAmika and run the setup there")
+    if n > 60 and not long_paths_enabled():
+        return (f"WARNING: {folder} is {n} characters long and Windows long paths are off; files deep in the "
+                "environments can pass the 260-character limit. A short folder such as C:\\OpenAmika is safer")
+    return ""
+
+
 class Verified:
     """Remembers files already hashed (by size + mtime) so a re-run does not re-hash gigabytes."""
 
@@ -243,6 +281,17 @@ class Verified:
     def record(self, f: Path, size: int, sha: str) -> None:
         self.data[str(f)] = {"sha256": sha, "size": size, "mtime_ns": f.stat().st_mtime_ns}
         self.save()
+
+    def installed(self, f: Path) -> None:
+        """Remember the SHA-256 of a file this script just put in place (her banks.json), so a later pin can replace
+        it while it is unchanged and an edit made after the install is kept."""
+        self.data.setdefault("_installed", {})[str(f)] = self.sha256(f)
+        self.save()
+
+    def as_installed(self, f: Path) -> bool:
+        """f is still exactly the file this script installed (not edited since)."""
+        want = (self.data.get("_installed") or {}).get(str(f))
+        return bool(want) and f.is_file() and self.sha256(f) == want
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -543,22 +592,40 @@ def ensure_torch(vpy: Path, device: str, reinstall: bool) -> Path:
     check_platform(vpy)
     local = "" if device == "mac" else TORCH_LOCAL[device]
     want = f"{TORCH_VERSION}{local}"
-    probe = ("import json, torch, torchaudio; print(json.dumps({'torch': torch.__version__, "
-             "'torchaudio': torchaudio.__version__, 'cuda': torch.version.cuda}))")
+    probe = ("import importlib.metadata as md, json\n"
+             "out = {}\n"
+             "try:\n"
+             "    out['installed'] = md.version('torch')\n"
+             "except Exception:\n"
+             "    pass\n"
+             "try:\n"
+             "    import torch, torchaudio\n"
+             "    out.update(torch=torch.__version__, torchaudio=torchaudio.__version__, cuda=torch.version.cuda)\n"
+             "except Exception as e:\n"
+             "    out['error'] = (type(e).__name__ + ': ' + str(e))[:300]\n"
+             "print(json.dumps(out))")
     p = subprocess.run([str(vpy), "-c", probe], capture_output=True, text=True)
-    cur = json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 and p.stdout.strip() else {}
+    try:
+        cur = json.loads(p.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        cur = {}
     good = cur.get("torch", "").split("+")[0] == TORCH_VERSION and cur.get("torchaudio", "").split("+")[0] == TORCH_VERSION
     if device == "cuda":
         good = good and str(cur.get("cuda") or "").startswith("12.8")
     elif device == "cpu":
         good = good and not cur.get("cuda")
+    # installed (pip calls it satisfied) but it does not import: damaged files, unless the folder path is too long
+    damaged = bool(cur.get("installed") and cur.get("error") and not too_long_hint(cur["error"]))
     if good and not reinstall:
         row("OK ", "torch", f"torch {cur['torch']} / torchaudio {cur['torchaudio']} (CUDA {cur.get('cuda') or '-'}, existing)")
     else:
         log(f"installing torch {want} + torchaudio {want} ({'CUDA 12.8' if device == 'cuda' else device})")
         idx = [] if device == "mac" else ["--index-url", TORCH_INDEX[device]]
-        pip(vpy, *idx, f"torch=={want}", f"torchaudio=={want}")
-        row("OK ", "torch", f"torch {want} / torchaudio {want} (installed)")
+        pip(vpy, *idx, f"torch=={want}", f"torchaudio=={want}")            # what is missing, or another build
+        again = reinstall or damaged
+        if again:      # --reinstall, or a damaged pair: put the same files in place again
+            pip(vpy, *idx, "--force-reinstall", "--no-deps", f"torch=={want}", f"torchaudio=={want}")
+        row("OK ", "torch", f"torch {want} / torchaudio {want} ({'installed again' if again else 'installed'})")
     cons = vpy.parent.parent / "openamika-constraints.txt"
     cons.write_text(f"torch=={want}\ntorchaudio=={want}\n", encoding="utf-8")
     return cons
@@ -961,7 +1028,8 @@ def hf_token(explicit: Optional[str]) -> tuple[Optional[str], str]:
     """(token, where it came from) for her repository, or (None, ""): --hf-token, HF_TOKEN (or the older
     HUGGING_FACE_HUB_TOKEN), else the file `hf auth login` saves (HF_TOKEN_PATH, or "token" in HF_HOME, by default
     ~/.cache/huggingface), unless HF_HUB_DISABLE_IMPLICIT_TOKEN is set. Only needed while the repository is private.
-    It is sent to the Hugging Face host only (never to the CDN it redirects to) and is never printed or written."""
+    It is sent to huggingface.co only (never to the CDN it redirects to, nor to a mirror HF_ENDPOINT names: see
+    token_goes_to) and is never printed or written."""
     if explicit and explicit.strip():
         return explicit.strip(), "--hf-token"
     for var in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
@@ -1034,8 +1102,9 @@ def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str],
     """Bring every file of `files` ({path under dest: (size, sha256), or (None, None) when not pinned}) into dest. A
     file already there with its pinned size and SHA-256 stays; any other one comes from Hugging Face (or HF_ENDPOINT)
     at args.revision, or from the --from-dir folder, and is checked before it takes its place (through a .part file,
-    so an interrupted download resumes). A file named in `keep` stays as it is when present (her banks.json, which the
-    Setup page edits). With --verify nothing is fetched: what is missing or different is only listed.
+    so an interrupted download resumes). A file named in `keep` (her banks.json, which the Setup page edits) stays as
+    it is once it was edited after the install; while it is still the copy this script installed, a newer pin
+    replaces it. With --verify nothing is fetched: what is missing or different is only listed.
     Returns {"present", "fetched", "kept": counts, "bad": [paths]}."""
     force = args.update_voice if what == "her voice" else args.update_avatar
     stats: dict[str, Any] = {"present": 0, "fetched": 0, "kept": 0, "bad": []}
@@ -1046,8 +1115,8 @@ def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str],
         as_pinned = ver.ok(target, size, sha) if size is not None and sha else target.is_file()
         if as_pinned and (not force or rel in keep):
             stats["present"] += 1
-        elif rel in keep and target.is_file():             # edited after the install: hers to keep
-            stats["kept"] += 1
+        elif rel in keep and target.is_file() and not ver.as_installed(target):
+            stats["kept"] += 1                             # edited after the install (Setup page): hers to keep
         elif args.verify:
             stats["bad"].append(rel)
         else:
@@ -1065,6 +1134,8 @@ def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str],
                 fetch(url, target, size, sha, None, auth=args.token)
                 if size is not None and sha:
                     ver.record(target, size, sha)        # fetch() checked it
+            if rel in keep:
+                ver.installed(target)                    # an unedited copy may be replaced by a later pin
             stats["fetched"] += 1
         done += size or 0
         if time.time() - t_last > 10 and i < len(files) and not args.verify:
@@ -1102,22 +1173,31 @@ def hf_refused(e: HTTPStatusError, args: argparse.Namespace) -> str:
 
 def fetch_assets(what: str, files: dict, dest: Path, repo_path: Callable[[str], str], args: argparse.Namespace,
                  ver: Verified, keep: tuple[str, ...] = ()) -> dict:
-    """install_files with its failures worded for the summary row."""
+    """install_files with its failures worded for the summary row. A refusal or a network failure is also said at
+    once: the voice server install that follows takes minutes before the summary repeats it."""
     try:
         return install_files(what, files, dest, repo_path, args, ver, keep)
     except HTTPStatusError as e:
         if args.from_dir:
             raise
-        raise SetupError(hf_refused(e, args)) from e
+        msg = hf_refused(e, args)
+        log(f"!! {what}: {msg}")
+        raise SetupError(msg) from e
     except IntegrityError as e:
-        src = "the folder --from-dir names" if args.from_dir else "Hugging Face"
-        raise IntegrityError(f"{e} The file from {src} is not the one OpenAmika pins; files already in place are kept. "
-                             "Run this script again; if it repeats, update OpenAmika (git pull)") from e
+        text = str(e).rstrip()
+        text += "" if text.endswith(".") else "."
+        if args.from_dir:
+            raise IntegrityError(f"{text} Files already in place are kept") from e
+        raise IntegrityError(f"{text} Files already in place are kept. Run this script again; if it repeats, update "
+                             "OpenAmika (git pull)") from e
     except SetupError as e:
         if args.from_dir or "the disk is full" in str(e):
             raise
-        raise SetupError(f"{e}. Check the internet connection and run this script again (files already downloaded "
-                         "are kept and the rest resumes)") from e
+        msg = (f"{e}. Check the internet connection (if huggingface.co cannot be reached from here, set HF_ENDPOINT to "
+               "a Hugging Face mirror) and run this script again (files already downloaded are kept and the rest "
+               "resumes)")
+        log(f"!! {what}: {msg}")
+        raise SetupError(msg) from e
 
 
 def adapter_tags() -> Optional[tuple[list[str], set[str]]]:
@@ -1329,17 +1409,30 @@ import json, importlib, sys
 mods = ["torch", "torchaudio", "transformers", "onnxruntime", "pyopenjtalk", "nltk", "jieba", "opencc", "g2p_en",
         "pypinyin", "cn2an", "librosa", "soundfile", "pytorch_lightning", "peft", "socketio", "aiohttp", "split_lang",
         "fast_langdetect", "x_transformers", "matplotlib", "resampy", "ffmpeg", "ToJyutping", "g2pk2"]
-out, bad = {}, {}
+out, bad, dists = {}, {}, {}
 for m in mods:
     try:
         mod = importlib.import_module(m)
         out[m] = getattr(mod, "__version__", "ok")
     except Exception as e:
         bad[m] = f"{type(e).__name__}: {e}"[:200]
-import torch
-out["cuda"] = torch.cuda.is_available()
-out["gpu"] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else ""
-print(json.dumps({"ok": out, "bad": bad}))
+if bad:                  # installed but not importable: the distributions (name==version) to put in place again
+    try:
+        import importlib.metadata as md
+        for dist in md.distributions():
+            files = {str(f).replace("\\", "/") for f in (dist.files or [])}
+            for m in bad:
+                if m + "/__init__.py" in files or any(f.startswith(m + ".") and "/" not in f[len(m):] for f in files):
+                    dists.setdefault(m, []).append(dist.metadata["Name"] + "==" + dist.version)
+    except Exception:
+        pass
+cuda = False
+if "torch" in out:
+    import torch
+    cuda = torch.cuda.is_available()
+out["cuda"] = cuda
+out["gpu"] = torch.cuda.get_device_name(0) if cuda else ""
+print(json.dumps({"ok": out, "bad": bad, "dists": dists}))
 """
 
 
@@ -1351,7 +1444,19 @@ def verify_imports(vpy: Path) -> dict:
         raise SetupError(f"import check failed:\n{p.stderr[-1500:]}")
     bad = {k: v for k, v in res["bad"].items() if k not in ("g2pk2",)}   # Korean is optional
     if bad:
-        row("!! ", "imports", "; ".join(f"{k}: {v}" for k, v in bad.items()))
+        detail = "; ".join(f"{k}: {v}" for k, v in bad.items())
+        hint = too_long_hint(detail)
+        # installed but damaged (pip calls them satisfied); torch and torchaudio come from the PyTorch index (--reinstall)
+        redo = sorted({d for k in bad for d in (res.get("dists") or {}).get(k, [])
+                       if not d.lower().startswith(("torch==", "torchaudio=="))})
+        if hint:
+            detail += f" — {hint}"
+        elif redo:
+            detail += (f" — installed but damaged: {vpy} -m pip install --force-reinstall --no-deps {' '.join(redo)}, "
+                       "then run this script again")
+        else:
+            detail += " — run this script again with --reinstall; if it repeats, see the pip output above"
+        row("!! ", "imports", detail)
     else:
         ok = res["ok"]
         gpu = f"CUDA OK on {ok['gpu']}" if ok.get("cuda") else "no CUDA (CPU)"
@@ -1445,8 +1550,9 @@ def check_launcher(engine: Path) -> None:
     hint = (f'settings.json needs  "tts_character": "{VOICE_ID}"  and  "services": {{"tts": '
             f'{json.dumps(block)}}}  (settings.example.json has both)')
     if not settings.is_file():
-        row("-- ", "launcher", "settings.json not found yet: scripts/setup_windows.ps1 creates it (or copy settings.example.json "
-            "to settings.json); its \"services.tts\" block starts this server on port 8002")
+        row("-- ", "launcher", "settings.json not found yet: the core setup (powershell -ExecutionPolicy Bypass -File "
+            "scripts\\setup_windows.ps1) creates it, or copy settings.example.json to settings.json; its \"services.tts\" "
+            "block starts this server on port 8002")
         return
     try:
         cfg = json.loads(settings.read_text(encoding="utf-8-sig"))
@@ -1629,10 +1735,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not args.verify and free is not None and free < (2 if args.assets_only else 12):
         log(f"WARNING: only {free:.0f} GB free; " + ("her voice and Live2D model need about 0.5 GB" if args.assets_only
                                                   else "a full install needs about 9 GB"))
-    if IS_WIN and not args.verify and len(str(engine)) > 100 and not long_paths_enabled():
-        log(f"WARNING: {engine} is {len(str(engine))} characters long and Windows long paths are off: files deep in the "
-            "venv and the GPT-SoVITS tree can pass the 260-character limit. Use a shorter folder, or enable "
-            "LongPathsEnabled (HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem) and re-run")
+    warning = "" if args.verify else long_folder_warning(ROOT if engine.is_relative_to(ROOT) else engine)
+    if warning:
+        log(warning)
     voice_dir = engine / "Speakers" / VOICE_ID
     avatar_dir = Path(args.avatar_dir).expanduser()
     voice_missing = args.update_voice or not (voice_dir / "character.json").is_file()
@@ -1645,6 +1750,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             args.accept_voice_license = ask_voice_license()   # asked first, so the long install can run unattended
             args.license_how = "typed yes" if args.accept_voice_license else ""
     args.token, args.token_source = (None, "") if (args.verify or args.from_dir) else hf_token(args.hf_token)
+    if args.token and not token_goes_to(HF):
+        log(f"HF_ENDPOINT is {HF}: your Hugging Face token (from {args.token_source}) is not sent to a mirror, which "
+            "serves public files only")
+        args.token, args.token_source = None, ""
     t0 = time.time()
     rc = 0
     steps = Steps()
@@ -1711,8 +1820,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.assets_only:
         print("Done: her voice and Live2D model are in place.")
     elif IS_WIN:
-        print("Done. Next:  Start_OpenAmika.bat   (her voice server starts with the rest; the page opens at "
-              "http://localhost:53000)")
+        print("Done. Next:  .\\Start_OpenAmika.bat   (or double-click it: her voice server starts with the rest; the page "
+              "opens at http://localhost:53000)")
         print(f"Check everything first, without starting anything:  {check}")
     else:
         print(f"Done. Next:  {check}   then   <brain python> launch.py")

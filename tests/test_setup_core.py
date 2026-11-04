@@ -69,22 +69,92 @@ def test_a_conda_environment_from_the_old_readme_is_used_as_it_is(checkout):
     assert core.settings_from_example("cuda", False)["brain_python"] == str(Path("envs/brain/python.exe"))
 
 
+def make_envs(checkout, *names):
+    for name in names:
+        exe = core.env_python(checkout / "envs" / name)
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        exe.write_bytes(b"")
+
+
 def test_settings_json_is_created_once_and_never_changed(checkout):
     args = core.argparse.Namespace(check=False)
     core.ensure_settings("cuda", True, args)
     path = checkout / "settings.json"
     assert json.loads(path.read_text("utf-8"))["vision"]["enabled"] is True
     assert rows()["settings.json"][0] == "OK" and "created" in rows()["settings.json"][1]
-    with pytest.raises(core.SetupError, match="does not exist"):              # its interpreters are not there yet
-        core.ensure_settings("cuda", True, args)
-    for name in ("brain", "speech", "embed", "vision"):
-        exe = core.env_python(checkout / "envs" / name)
-        exe.parent.mkdir(parents=True, exist_ok=True)
-        exe.write_bytes(b"")
+    core.ROWS.clear()
+    core.ensure_settings("cuda", True, args)          # its environments are not made yet: their own rows say why
+    mark, detail = rows()["settings.json"]
+    assert mark == "--" and "not made yet" in detail and "see the speech recognition row" in detail
+    make_envs(checkout, "brain", "speech", "embed", "vision")
     before = path.read_bytes()
     core.ROWS.clear()
-    core.ensure_settings("cpu", False, args)                                  # other choices: the file stays as it is
-    assert path.read_bytes() == before and "not changed" in rows()["settings.json"][1]
+    core.ensure_settings("cpu", True, args)                                   # other choices: the file stays as it is
+    assert path.read_bytes() == before and rows()["settings.json"] == ("OK", "existing, not changed (its interpreters exist)")
+
+
+def test_an_interpreter_outside_envs_that_is_gone_names_the_environment_to_use(checkout):
+    cfg = core.settings_from_example("cuda", False)
+    cfg["speech_python"] = str(checkout / "elsewhere" / "python.exe")
+    (checkout / "settings.json").write_text(json.dumps(cfg), "utf-8")
+    make_envs(checkout, "brain", "speech", "embed")
+    with pytest.raises(core.SetupError) as caught:
+        core.ensure_settings("cuda", False, core.argparse.Namespace(check=False))
+    message = str(caught.value)
+    assert "as speech_python, which does not exist" in message
+    assert f"point speech_python at {core.rel(core.env_python(checkout / 'envs' / 'speech'))}" in message
+
+
+def test_a_rerun_after_an_interrupted_first_run_ends_with_ok_settings(checkout, monkeypatch):
+    """The first run made envs\\brain and settings.json, then stopped (Ctrl+C in the speech environment's torch
+    download); the re-run makes the rest and its summary has no !! row for settings.json."""
+    made = []
+
+    def make_env(key, base_py, device, args):               # stands in for venv + torch + pip
+        folder = core.ENV_SPECS[key][0]
+        make_envs(checkout, folder)
+        made.append(folder)
+        exe = core.env_python(core.ENVS / folder)
+        core.row("OK ", core.ROW_NAMES[key], f"{core.rel(exe)} (existing)")
+        return exe
+
+    monkeypatch.setattr(core, "ensure_env", make_env)
+    monkeypatch.setattr(core.base, "find_base_python", lambda explicit: (["py", "-3.11"], (3, 11, 9)))
+    monkeypatch.setattr(core, "gpu_info", lambda: ("NVIDIA GeForce RTX 5080", 16303))
+    monkeypatch.setattr(core, "ensure_speech_model", lambda args: core.row("OK ", "speech model", "verified"))
+    monkeypatch.setattr(core, "ensure_hf_model", lambda label, vpy, folder, repo, *rest: core.row("OK ", label, repo))
+    make_envs(checkout, "brain")
+    (checkout / "settings.json").write_text(json.dumps(core.settings_from_example("cuda", True)), "utf-8")
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        rc = core.main([])
+    got = rows()
+    assert rc == 0, out.getvalue()
+    assert made == ["brain", "speech", "embed", "vision"]
+    assert got["settings.json"][0] == "OK" and not any(mark == "!!" for mark, _ in got.values())
+    assert got["vision model"] == ("OK", "Qwen/Qwen3-VL-2B-Instruct")
+    assert list(got)[-2:] == ["settings.json", "brain/.env"]                 # written after the environments
+    assert (".\\Start_OpenAmika.bat" if core.IS_WIN else "launch.py") in out.getvalue()      # PowerShell needs the .\
+
+
+def test_models_named_in_settings_json_are_the_ones_fetched(checkout):
+    assert core.chosen_models() == ("BAAI/bge-m3", "qwen3-vl-2b")
+    cfg = core.settings_from_example("cuda", True)
+    cfg["embedder"]["model"], cfg["vision"]["model"] = "intfloat/multilingual-e5-large", "smolvlm2-500m"
+    (checkout / "settings.json").write_text(json.dumps(cfg), "utf-8")
+    assert core.chosen_models() == ("intfloat/multilingual-e5-large", "smolvlm2-500m")
+    assert core.vision_repo("smolvlm2-500m") == "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
+    with pytest.raises(core.SetupError, match="does not know"):
+        core.vision_repo("no-such-model")
+
+
+def test_a_damaged_package_is_installed_again_but_never_torch_or_a_too_long_path():
+    found = {"bad": {"cv2": "ImportError: DLL load failed while importing cv2: The specified module could not be found.",
+                     "torch": "OSError: [WinError 126] fbgemm.dll", "PIL": "ImportError: cannot import name '_imaging'",
+                     "resampy": "ImportError: DLL load failed while importing _box: The filename or extension is too long."},
+             "broken": {"cv2": ["opencv-python==4.12.0.88"], "torch": ["torch==2.10.0+cu128"], "PIL": ["pillow==12.0.0"],
+                        "resampy": ["resampy==0.4.3"]}}
+    assert core.damaged_dists(found) == ["opencv-python==4.12.0.88", "pillow==12.0.0"]
+    assert core.damaged_dists({"bad": {"funasr": "ModuleNotFoundError"}, "broken": {}}) == []
 
 
 def test_brain_env_file_is_copied_and_a_missing_key_is_informational(checkout):

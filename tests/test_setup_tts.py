@@ -50,7 +50,9 @@ class Hub:
     def __init__(self):
         self.private = False
         self.gone = set()                     # paths answered with 404 EntryNotFound
+        self.tampered = {}                    # path -> other bytes of the same length (not the pinned file)
         self.requests = 0
+        self.saw_auth = 0                     # requests to the Hub itself that carried a token
         self.cdn_saw_auth = []
         self.same_host_redirect_auth = []
         self.ranges = []
@@ -94,6 +96,7 @@ def make_servers(hub):
 
         def do_GET(self):  # noqa: N802
             hub.requests += 1
+            hub.saw_auth += bool(self.headers.get("Authorization"))
             path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
             if path.startswith("/api/resolve-cache/"):              # the same-host second leg of a redirect
                 hub.same_host_redirect_auth.append(bool(self.headers.get("Authorization")))
@@ -114,7 +117,7 @@ def make_servers(hub):
                 return self.empty(302, Location=f"{cdn_base}/blob/{urllib.parse.quote(rel)}")
             if rel.startswith("references/"):
                 return self.empty(307, Location=f"/api/resolve-cache/models/{urllib.parse.quote(rel)}")
-            self.send_file(REPO_FILES[rel])
+            self.send_file(hub.tampered.get(rel, REPO_FILES[rel]))
 
         def send_file(self, data):
             self.send_response(200)
@@ -136,6 +139,7 @@ def hub(tmp_path, monkeypatch):
     hub = Hub()
     hf, cdn, base = make_servers(hub)
     monkeypatch.setattr(st, "HF", base)
+    monkeypatch.setattr(st, "TOKEN_HOSTS", ("huggingface.co", "127.0.0.1"))   # the stand-in plays huggingface.co
     monkeypatch.setattr(st, "VOICE_ADAPTER", tmp_path / "no-adapter.py")      # the real adapter wants all 67 tags
     for var in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HF_TOKEN_PATH"):
         monkeypatch.delenv(var, raising=False)
@@ -204,6 +208,19 @@ def test_private_repo_without_a_token_says_what_to_do(hub):
     assert "Traceback" not in out
     assert "Fix the !! lines above and run this script again" in out
     assert not (hub.engine / "Speakers" / "MekaHime_Amika" / "character.json").exists()
+    # said the moment it happens, not only in the summary after the voice server's long install
+    assert "[setup] !! her voice: Hugging Face refused the download (HTTP 401)" in out.split("OpenAmika voice setup summary")[0]
+
+
+def test_a_mirror_never_gets_the_token(hub, monkeypatch):
+    monkeypatch.setattr(st, "TOKEN_HOSTS", ("huggingface.co",))        # the stand-in is a mirror (HF_ENDPOINT) now
+    monkeypatch.setenv("HF_TOKEN", TOKEN)
+    rc, rows, out = run(hub, "--accept-voice-license")
+    assert rc == 0, out
+    assert hub.saw_auth == 0 and hub.cdn_saw_auth == []
+    assert "is not sent to a mirror" in out and TOKEN not in out
+    assert st.token_goes_to("https://huggingface.co/x") and st.token_goes_to("https://cdn-lfs.huggingface.co/x")
+    assert not st.token_goes_to("https://hf-mirror.com/x") and not st.token_goes_to("https://huggingface.co.example.org/x")
 
 
 def test_private_repo_with_a_token_works_and_the_cdn_never_sees_it(hub, monkeypatch):
@@ -255,6 +272,69 @@ def test_her_edited_banks_json_is_kept(hub):
     rc, rows, _ = run(hub, "--update-avatar")
     assert rc == 0 and "your banks.json kept" in rows[MODEL][1]
     assert "casual_happy" in model["live2d/Amika/banks.json"].read_text("utf-8")
+
+
+def test_an_unedited_banks_json_follows_a_newer_pin_and_an_edited_one_stays(hub, monkeypatch):
+    assert run(hub, "--accept-voice-license")[0] == 0
+    banks = installed(hub)[1]["live2d/Amika/banks.json"]
+
+    def pin(data):                     # a newer revision of her repository brings another banks.json
+        monkeypatch.setitem(REPO_FILES, "live2d/Amika/banks.json", data)
+        manifest = json.loads(hub.manifest.read_text("utf-8"))
+        manifest["files"]["live2d/Amika/banks.json"] = [len(data), hashlib.sha256(data).hexdigest()]
+        hub.manifest.write_text(json.dumps(manifest), "utf-8")
+
+    pin(b'{"banks": {"v": 2}}')
+    rc, rows, out = run(hub)
+    assert rc == 0, out
+    assert banks.read_bytes() == b'{"banks": {"v": 2}}' and "kept" not in rows[MODEL][1]
+    banks.write_text('{"banks": {"mine": 1}}', "utf-8")                 # then edited on the Setup page
+    pin(b'{"banks": {"v": 3}}')
+    rc, rows, _ = run(hub)
+    assert rc == 0 and "your banks.json kept" in rows[MODEL][1]
+    assert banks.read_text("utf-8") == '{"banks": {"mine": 1}}'
+
+
+def test_a_file_that_is_not_the_pinned_one_is_named_once_and_kept_out(hub):
+    hub.tampered["README.md"] = b"# other card\n"                       # same length, other bytes
+    rc, rows, _ = run(hub, "--accept-voice-license")
+    detail = rows[VOICE][1]
+    assert rc == 1 and rows[VOICE][0] == "!!" and "SHA-256 mismatch" in detail
+    assert detail.count("not the pinned one") == 1 and "OpenAmika pins" not in detail and "git pull" in detail
+    assert not (hub.engine / "Speakers" / "MekaHime_Amika" / "README.md").exists()
+
+
+def test_a_damaged_torch_is_installed_again_but_a_fresh_one_once(monkeypatch, tmp_path):
+    """pip calls an installed torch satisfied even when its files are damaged: the same build goes in place again
+    (--force-reinstall); a fresh venv gets one plain install, and a too-long folder is left to its own hint."""
+    calls = []
+    monkeypatch.setattr(st, "check_platform", lambda vpy: None)
+    monkeypatch.setattr(st, "pip", lambda vpy, *args: calls.append(args))
+    (tmp_path / ".venv" / "Scripts").mkdir(parents=True)
+    vpy = tmp_path / ".venv" / "Scripts" / "python.exe"
+    cases = {"damaged": {"installed": "2.9.1+cu128", "error": "OSError: [WinError 126] Error loading c10.dll"},
+             "fresh": {"error": "ModuleNotFoundError: No module named 'torch'"},
+             "too long": {"installed": "2.9.1+cu128",
+                          "error": "ImportError: DLL load failed while importing _C: The filename or extension is too long."}}
+    for name, probe in cases.items():
+        calls.clear()
+        monkeypatch.setattr(st.subprocess, "run", lambda *a, probe=probe, **k: type("P", (), {
+            "stdout": json.dumps(probe), "returncode": 0})())
+        st.ensure_torch(vpy, "cuda", False)
+        forced = [c for c in calls if "--force-reinstall" in c]
+        assert len(calls) == (2 if name == "damaged" else 1), (name, calls)
+        assert bool(forced) == (name == "damaged"), name
+        assert all("torch==2.9.1+cu128" in c for c in calls)
+
+
+def test_a_too_long_folder_is_named_with_its_only_fix():
+    err = "resampy: ImportError: DLL load failed while importing _box: The filename or extension is too long."
+    hint = st.too_long_hint(err)
+    assert "C:\\OpenAmika" in hint and "does not help" in hint
+    assert st.too_long_hint("resampy: ImportError: No module named 'resampy'") == ""
+    if st.IS_WIN:
+        assert "DLL" in st.long_folder_warning(Path("C:/" + "x" * 120))
+        assert st.long_folder_warning(Path("C:/OpenAmika")) == ""
 
 
 def test_an_interrupted_download_resumes_from_its_part_file(hub):
