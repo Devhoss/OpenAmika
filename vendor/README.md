@@ -5,13 +5,14 @@ GPT-SoVITS (v2ProPlus)**, derived from the OpenSakura voice server. The server c
 the upstream GPT-SoVITS checkout, its pretrained models, the Python venv, ffmpeg and Amika's voice are assembled
 from public sources by
 
-```bash
-python scripts/setup_tts.py
+```powershell
+envs\brain\Scripts\python.exe scripts\setup_tts.py      # after scripts\setup_windows.ps1; any Python 3.11 runs it
 ```
 
 Amika's voice is downloaded from the Hugging Face repository
-[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) (no account needed) after you
-accept its personal-use license when the script asks. The same repository, under the same license, holds her
+[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) after you accept its personal-use
+license when the script asks (no account is needed once the repository is public; until then, a read token in
+`HF_TOKEN`), and every file is checked against `scripts/MekaHime_Amika.manifest.json`. The same repository, under the same license, holds her
 Live2D model; the script puts it into `avatar/models/Amika/`.
 Install details, flags, layout and the package list are in [`tts-engine/README.md`](tts-engine/README.md).
 

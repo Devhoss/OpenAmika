@@ -24,7 +24,7 @@ avatar/stage/
 tests/output/
 controls_verification.json
 
-# ── Environments created by the README (conda create -p envs\<name>) ──
+# ── Python environments made by scripts/setup_core.py (venvs in envs\<name>) ──
 envs/
 
 # ── Large model weights and licensed assets (bring your own / download) ──

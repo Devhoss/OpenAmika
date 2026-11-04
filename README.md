@@ -7,8 +7,7 @@
 **Hi! I'm Amika** — MekaHime's AI companion, open source
 
 Amika is a Live2D anime girl who talks with you by voice and text in real time, remembers you, and lives with you
-in your city. She runs on your own PC, with OpenRouter or fully local with Ollama: a Live2D body, a real-time voice
-with 69 acted emotions and an evidence-based long-term memory. A hosted version runs at
+in your city. She runs on your own PC, with OpenRouter or fully local with Ollama. A hosted version runs at
 [mekahime.com/amika](https://www.mekahime.com/amika).
 
 [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | **English**
@@ -17,7 +16,7 @@ with 69 acted emotions and an evidence-based long-term memory. A hosted version 
 [![GitHub](https://img.shields.io/badge/GitHub-zeekk0%2FOpenAmika-181717?logo=github)](https://github.com/zeekk0/OpenAmika)
 [![Release](https://img.shields.io/github/v/release/zeekk0/OpenAmika?logo=github&color=d8b4e2)](https://github.com/zeekk0/OpenAmika/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-43b581)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20(Linux%20untested)-0078D6?logo=windows&logoColor=white)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-Windows%20(Linux%20untested)-0078D6?logo=windows&logoColor=white)](#what-you-need)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3119/)
 
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-MekaHime%2FMekaHime__Amika-ffcc4d)](https://huggingface.co/MekaHime/MekaHime_Amika)
@@ -32,344 +31,100 @@ with 69 acted emotions and an evidence-based long-term memory. A hosted version 
 > 💖 If Amika makes your day better, give us a ⭐ on [GitHub](https://github.com/zeekk0/OpenAmika) — it helps more
 > people find her! · Support the project: https://www.mekahime.com/donate
 
-> ⚠️ OpenAmika's code is MIT. Amika's voice model, Live2D model and reference audio are © MekaHime Inc. under a
-> personal-use license (see the [Hugging Face model card](https://huggingface.co/MekaHime/MekaHime_Amika) and its
-> LICENSE): personal, non-commercial use only, 18+, no redistribution or re-hosting, no training other models on
-> them, and visible credit to MekaHime when you post videos or streams with her.
+## What you need
 
-Report bugs at https://github.com/zeekk0/OpenAmika/issues, by email hi@mekahime.com, or on Discord
-https://discord.gg/mekahime
+- Windows 10 or 11 and an NVIDIA graphics card (RTX 20-series or newer, 8 GB of video memory or more; her camera
+  eyes need 16 GB), with a recent driver
+- [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick **Add python.exe to PATH** when you
+  install it) and [Git](https://git-scm.com/download/win)
+- About 40 GB of free disk. Setting her up downloads about 15–20 GB and takes 30–60 minutes
+- An [OpenRouter](https://openrouter.ai) key (a few dollars of credit last a long time), or
+  [Ollama](https://ollama.com) to run her brain on your PC too
 
-Project page: https://www.mekahime.com/openamika · Source: https://github.com/zeekk0/OpenAmika ·
-Support the project: https://www.mekahime.com/donate
+## Set her up
 
-OpenAmika is Amika's whole harness, open source: the three-tier brain, the evidence-based long-term memory,
-real-time speech with barge-in, her voice server, the Live2D stage that keeps her face in sync with her voice, and
-the optional tools, smart home, camera and Discord/Telegram channels. Amika Online (the hosted app) runs the same
-brain on MekaHime's servers.
-
-```
- you ──mic──▶ STT (SenseVoiceSmall, local) ──▶ brain: surface ─▶ deep ─▶ reflection ──▶ her voice server ──▶ 🔊
-               Silero VAD · barge-in            │ OpenRouter or Ollama                       │ one emotion tag per sentence
-                                                │ evidence memory (BM25 + local bge-m3)      ▼
-                                                └─ optional: MCP tools · smart home        Live2D avatar (face + motion
-                                                                                           start with the sentence)
-```
-
-## What's inside
-
-| folder | what |
-|---|---|
-| `brain/` | the brain (Flask-SocketIO). Three prompt tiers: **surface** (an instant four-line reflex), **deep** (her real reply: `[register_emotion]"speech"` + 我心想 inner thoughts), **reflection** (a background coach that plans and sometimes makes her speak first). Evidence memory (`f_memory.py`, BM25 + embeddings), per-call cost metering with reservations and settlement, the MCP tool phase (`f_tools.py`), the Ollama transport (`f_ollama.py`), her persona (`scenes.json`, `例子.txt`, `表层.txt`, `思考.txt`; shipped copies in `brain/defaults/`) |
-| `speech/` | the gateway (FastAPI): local SenseVoiceSmall STT with Silero VAD and barge-in, streaming sentence splitting, the TTS client and voice adapter, every web page and the browser WebSocket |
-| `vendor/tts-engine/` | her voice server (`main.py`, a MekaHime build of GPT-SoVITS); `scripts/setup_tts.py` installs upstream GPT-SoVITS, its models, Amika's voice and her Live2D model next to it (see [`vendor/tts-engine/README.md`](vendor/tts-engine/README.md)) |
-| `ui/` | four pages: **Setup** (health, models, voice, avatar, personality), **Tools** (MCP servers, policies, approvals), **Use** (power, mic, Live2D stage, cost and latency telemetry), **About** (MekaHime, supporting the project, licenses); the interactive architecture map is at `/flow` |
-| `avatar/` | where Live2D models go (`avatar/models/<Name>/`; `setup_tts.py` puts Amika's there), plus `retarget_motions.py` |
-| `vision/` | optional camera: a small local VLM (Qwen3-VL-2B by default) describes what she sees |
-| `messengers/` | optional "Text her": Discord and/or Telegram bots, words only |
-| `servers/` | optional MCP servers: `openamika-iot` (Zigbee smart home via mosquitto + zigbee2mqtt) and `openamika-agents` (Hermes Agent, nanoMuse) |
-| `IoT/` | Windows setup scripts for the smart home (CP210x driver, mosquitto, a zigbee2mqtt serial-port patch) |
-| `config/` | non-secret settings: LLM roles and presets, model catalogs and prices, word replacements, examples for tools and messengers |
-| `scripts/` | `download_sensevoice.py` fetches the speech-recognition model; `setup_tts.py` installs her voice and her Live2D model |
-| `launch.py` | one console for the whole stack: pre-flight lights, starts everything in order, Ctrl+C stops it all |
-| `docs/` | `ARCHITECTURE.md`, `PERSONALITY.md`, `TTS.md`, `AVATAR.md`, `TOOLS.md`, `MESSENGERS.md`, `IOT_DISCLAIMER.md` (the IoT safety statement) |
-
-## Two ways to run her
-
-| | brain | ears, voice, memory, avatar | needs | cost |
-|---|---|---|---|---|
-| **With OpenRouter** (default) | OpenRouter: GLM-5 for the deep tier, DeepSeek V4.1 Flash for surface and reflection (changeable in Setup) | on your PC | Windows 10/11, NVIDIA GPU with ~6.5 GB free VRAM, 16 GB RAM, ~25 GB disk | a fraction of a cent per turn; every call is metered and the Use page shows the live total |
-| **Fully local** (Ollama) | Ollama, any model you pull (e.g. `qwen3:8b`) | on your PC | as above + VRAM for the model (an 8B model needs ~6 GB more) | electricity only |
-
-Nothing about you leaves the PC except the LLM calls in OpenRouter mode: speech recognition, her voice,
-embeddings, memory, transcripts and logs stay local. In fully local mode nothing leaves at all.
-
-### What needs a GPU
-
-| part | runs on | VRAM (approx.) | without an NVIDIA GPU |
-|---|---|---|---|
-| speech recognition (SenseVoiceSmall) | CUDA | ~1–2 GB | set `"speech_device": "cpu"` in settings.json: works, slower |
-| memory embeddings (BAAI/bge-m3) | CUDA | ~1.5 GB | set the embedder's `"device": "cpu", "dtype": "fp32"`: works, slower |
-| her voice (the OpenAmika voice server, GPT-SoVITS) | CUDA | ~2.2–2.5 GB | `python scripts\setup_tts.py --cpu`: works, slower; without it she answers in text |
-| vision (optional, Qwen3-VL-2B) | CUDA | ~4.3 GB | leave `vision.enabled` false |
-| LLM roles | OpenRouter, or Ollama on your GPU | 0, or the model's size | use OpenRouter |
-| Live2D avatar | your browser (WebGL) | – | any modern desktop browser |
-
-Measured on a 16 GB RTX 5080: speech recognition, embeddings, vision and the voice server together use most of
-the card, so a 7–8B Ollama model does not fit next to all of them. Turn vision off, pick a smaller model, or run
-Ollama on a second PC (Setup → Brain takes its URL).
-
-## Requirements
-
-- **Windows 10/11** (the code is plain Python and should port to Linux/macOS with path tweaks, untested).
-- **Python 3.11** environments. The guide below uses [Miniconda](https://docs.anaconda.com/miniconda/) and keeps
-  every environment inside the OpenAmika folder (`envs\…`), so settings.json needs no absolute paths. Her voice
-  server gets its own venv in `vendor\tts-engine\.venv`, made by `scripts\setup_tts.py`.
-- An **NVIDIA GPU** with a recent driver (see the table above; RTX 50-series cards need the CUDA 12.8 builds the
-  guide installs), and [Git](https://git-scm.com/download/win).
-- An [OpenRouter](https://openrouter.ai) key **or** [Ollama](https://ollama.com) with a model.
-
-## Install (Windows)
-
-In a terminal with conda available (the Anaconda Prompt, or PowerShell after `conda init`). Downloads are about
-12–14 GB, most of it PyTorch.
+Open PowerShell in a folder that OneDrive does not sync (for example `C:\`) and run these lines one at a time:
 
 ```powershell
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
-
-# 1. three environments inside the folder
-conda create -y -p envs\brain  python=3.11
-conda create -y -p envs\speech python=3.11
-conda create -y -p envs\embed  python=3.11
-
-# 2. the brain (no GPU needed)
-envs\brain\python.exe -m pip install -r brain\requirements.txt
-
-# 3. speech: CUDA PyTorch first (cu128 = CUDA 12.8 wheels: RTX 20/30/40/50 series; for older cards
-#    pick the right command at https://pytorch.org/get-started/locally/), then the rest
-envs\speech\python.exe -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
-envs\speech\python.exe -m pip install -r speech\requirements.txt
-
-# 4. the memory embedder (its own env keeps its Hugging Face versions apart from speech)
-envs\embed\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu128
-envs\embed\python.exe -m pip install -r brain\requirements-embedder.txt
-
-# 5. the speech-recognition model (~940 MB, checksummed; re-run it after a network error)
-envs\speech\python.exe scripts\download_sensevoice.py
-
-# 6. her voice and her Live2D model (~5.5 GB of downloads; type yes to accept her license)
-envs\brain\python.exe scripts\setup_tts.py
-
-# 7. your settings and keys
-copy settings.example.json settings.json
-copy .env.example brain\.env
-notepad brain\.env        # put your key after OPENROUTER_API_KEY=  (skip for fully local)
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # her brain, ears, memory and eyes
+envs\brain\Scripts\python.exe scripts\setup_tts.py                   # her voice and Live2D model: type yes
+Start_OpenAmika.bat                                                  # start her
 ```
 
-Optional extras:
+Her voice and her Live2D model are free under MekaHime's personal-use license (see [Licenses](#licenses)); the
+second command shows it first and downloads them only after you type `yes`.
 
-```powershell
-# vision (her camera eyes): its own env, then set "vision": {"enabled": true} in settings.json
-conda create -y -p envs\vision python=3.11
-envs\vision\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu128
-envs\vision\python.exe -m pip install -r vision\requirements.txt
-
-# Discord for "Text her" (Telegram needs nothing extra)
-envs\speech\python.exe -m pip install -r messengers\requirements.txt
-```
-
-## Start her
-
-```powershell
-envs\brain\python.exe launch.py --check   # validates everything (imports, files, ports, keys); starts nothing
-Start_OpenAmika.bat                       # one console: pre-flight, her voice server, then embedder → brain → vision → speech
-```
-
-The browser opens **http://localhost:53000** when the speech gateway is up. The first start downloads the
-bge-m3 embedding model (~2.3 GB) into your Hugging Face cache, so give it a few minutes; later starts take
-about a minute. `Stop_OpenAmika.bat` (or Ctrl+C in the launcher console) stops everything the launcher started.
-
-On the **Use** page a one-time wizard introduces her: she asks your name (with an optional pronunciation
-guide for her voice), your city and her clock (detected from your browser), takes your OpenRouter key if
-`brain/.env` has none, and runs the health check. Then press power and talk, or type.
-
-The light at the top right of every page is the system health: green *System Ready*, yellow *Warnings*,
-red *System Failures*; click it for what is wrong. Without her voice server it stays yellow and she answers in
-text.
-
-### With OpenRouter
-
-Make an account at [openrouter.ai](https://openrouter.ai), add a few dollars of credit, create a key at
-[openrouter.ai/keys](https://openrouter.ai/keys) and put it in `brain/.env` (or paste it in the wizard). The
-default roles are a reviewed preset; Setup → Brain lists the alternatives with their prices, and the Use page
-shows the cost of the session as it happens.
-
-### Fully local with Ollama
-
-1. Install Ollama from [ollama.com/download](https://ollama.com/download) and pull a model:
-   `ollama pull qwen3:8b` (or `qwen3:4b` on a smaller card).
-2. Start OpenAmika, open **Setup → Brain**, switch to **Ollama**, press **Detect models**, pick one and press
-   **Use**: all four roles (surface, deep, reflection, memory writer) now run on it. The wizard offers the same
-   switch on first run.
-3. No key is needed; `launch.py --check` shows "API keys: none needed" once every role is local. Calls are
-   recorded in the same ledger at zero cost. Small models keep her personality less steadily than the
-   OpenRouter preset; in Professional mode you can mix (a local model for some roles, OpenRouter for the rest).
-
-### Her voice
-
-Her voice model is free and needs no account. It is a MekaHime asset under a
-[personal-use license](https://huggingface.co/MekaHime/MekaHime_Amika/blob/main/LICENSE): personal, hobbyist use
-only, 18+, no training other models on it, no re-hosting, and visible credit to MekaHime when you post videos or
-streams with her. `scripts\setup_tts.py` shows this first and asks you to type `yes`, then installs on its own
-(pass `--accept-voice-license` to skip the question): the OpenAmika voice server (`vendor/tts-engine`, a MekaHime
-build of GPT-SoVITS), upstream GPT-SoVITS with its models, and Amika's voice from
-[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). It ends with a summary; the line that
-matters is
+Both setup commands end with a summary: one line per part, `OK` when it is done, `!!` with the fix when it is not.
+Running a command again resumes and skips everything that is finished. These two lines mean she has her voice and
+her body:
 
 ```
-  OK voice MekaHime_Amika  ...\Speakers\MekaHime_Amika (downloaded from MekaHime/MekaHime_Amika@...; 69/69 emotion tags with a clip; all 67 tags OpenAmika's voice adapter can send have one)
+  OK voice MekaHime_Amika  ...\Speakers\MekaHime_Amika (downloaded 75 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 75 files verified; 69/69 emotion tags with a clip; ...)
+  OK Live2D model Amika    ...\avatar\models\Amika (downloaded 174 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 174 files verified; AmikaV4.model3.json, 142 motions, 25 expressions)
 ```
 
-If that row says `!!`, see the table below and run the same command again: finished steps are verified and
-skipped, so a re-run takes seconds. `settings.example.json` already has the launcher start the server
-(`services.tts`, port 8002, voice `MekaHime_Amika`); the summary's `launcher` row tells you if your
-`settings.json` differs.
+## Talk to her
 
-| what you see | fix |
+`Start_OpenAmika.bat` opens one console that starts all of her, and your browser opens **http://localhost:53000**
+when she is ready: about a minute, a few more the very first time. On your first visit she introduces herself and
+asks your name, your city and, if `brain\.env` has none yet, your OpenRouter key. Then press the power button and
+talk, or type. Click the page once so the browser lets her speak.
+
+The light at the top right of every page is her health: green means everything works; click it to see what is not.
+`Stop_OpenAmika.bat` (or Ctrl+C in her console) stops her. To check everything without starting anything, run
+`envs\brain\Scripts\python.exe launch.py --check`: it ends with `result: ready`, or names what to fix.
+
+## If something goes wrong
+
+| what you see | what to do |
 |---|---|
-| `!! voice MekaHime_Amika  not downloaded: her voice license was not accepted` | Re-run `envs\brain\python.exe scripts\setup_tts.py` and type `yes` when it asks. |
-| `!! voice MekaHime_Amika  download failed (network / HTTP error)` | Check your internet connection (Hugging Face must be reachable) and re-run; finished steps are skipped. |
-| `the voice engine needs Python 3.11 or 3.12` | Run the script with a Python 3.11 (`envs\brain\python.exe`), or pass `--python <path to python.exe>`. |
-| `-- launcher  ...` | Copy the `"tts_character"` and `"services"` → `"tts"` entries from `settings.example.json` into your `settings.json`. |
-| she replies in text but you hear nothing | `launch.py --check` and the health light must show **TTS** green; give her ~20 s after starting; click the page once so the browser allows sound. |
-| she sounds cut off or very slow | Close other GPU-heavy apps, or turn vision off: the voice server needs about 2.5 GB of free VRAM. |
+| `Python 3.11 was not found` | Install Python 3.11 (tick "Add python.exe to PATH"), open a new PowerShell window and run the setup again. |
+| `!! voice MekaHime_Amika  not downloaded: her license was not accepted` | Run `envs\brain\Scripts\python.exe scripts\setup_tts.py` again and type `yes`. |
+| `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401)` | Her files were not public yet, or your `HF_TOKEN` is wrong. Set a read token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) in the same window (`$env:HF_TOKEN = "hf_..."`) and run the command again. |
+| `download failed after 4 tries` or `Check the internet connection` | Run the same command again: it continues where it stopped. |
+| `does not see the GPU (CUDA)` | Update your NVIDIA driver and run the setup again. Without an NVIDIA card: `scripts\setup_windows.ps1 --cpu`. |
+| `settings.json not found` | Run `scripts\setup_windows.ps1` first. |
+| `No Live2D model yet` on the stage, or `!! Live2D model` / `!! her voice` in `launch.py --check` | Run `envs\brain\Scripts\python.exe scripts\setup_tts.py`. |
+| `no OpenRouter key yet` (`launch.py --check`, the setup summary) | Paste your key in the first-run wizard, or after `OPENROUTER_API_KEY=` in `brain\.env`. |
+| She answers in text but you hear nothing | Give her voice about 20 seconds after a start, then click the page once. The health light must show TTS green. |
+| Her voice stutters or is very slow | Close other programs that use the graphics card, or turn her eyes off: `"vision": {"enabled": false}` in `settings.json`. |
 
-More detail (flags, what gets installed where, how the server uses upstream, measurements):
-[`vendor/tts-engine/README.md`](vendor/tts-engine/README.md); the request contract and the voice adapter:
-[`docs/TTS.md`](docs/TTS.md).
+Every part writes a log in `logs\`. For anything else, ask on [Discord](https://discord.gg/mekahime) or open an
+[issue](https://github.com/zeekk0/OpenAmika/issues). Using an AI coding agent? Point it at
+[README_IF_YOU_ARE_AI_AGENT.md](README_IF_YOU_ARE_AI_AGENT.md).
 
-### Her body
+## Optional add-ons
 
-The same script downloads **her Live2D model** from the same repository, under the same license, into
-`avatar/models/Amika/`, so the Use page shows her on the first start (`--skip-avatar` leaves it out; the stage
-then says "No Live2D model yet" and everything else works). Any other Cubism model works too: drop its folder
-into `avatar/models/<Name>/` and reload; see [`avatar/models/README.md`](avatar/models/README.md) for free sample
-models and the emotion banks.
+- **Fully local**: install [Ollama](https://ollama.com), run `ollama pull qwen3:8b`, then on the Setup page choose
+  Brain → Ollama → Detect models → Use. No key needed.
+- **Tools**: MCP servers and task agents she can use for you, on the Tools page ([docs/TOOLS.md](docs/TOOLS.md)).
+- **Smart home**: Zigbee plugs she can switch ([IoT/README.md](IoT/README.md)). It stays off until you read and
+  accept the IoT safety statement ([docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)) on the Tools page. She runs on
+  language models and can make mistakes: never connect heaters, locks, valves or anything that could cause harm.
+- **Text her** on Discord or Telegram ([docs/MESSENGERS.md](docs/MESSENGERS.md)).
+- **Your phone**: `Tailscale_Serve_OpenAmika.bat` makes her reachable on your own devices over
+  [Tailscale](https://tailscale.com).
 
-### From your phone (Tailscale)
+## Licenses
 
-The app binds to 127.0.0.1 on purpose. To reach it from your own devices, use
-[Tailscale Serve](https://tailscale.com/kb/1312/serve) instead of opening ports:
+- OpenAmika's code is **MIT** ([LICENSE](LICENSE)). Third-party parts keep their own licenses
+  ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)); the Live2D Cubism Core in `ui/vendor/` is not MIT.
+- **Amika herself is not MIT.** Her character, art, voice, Live2D model and their weights
+  ([MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)) belong to MekaHime Inc. and are free
+  under a personal-use license: personal, non-commercial use only, 18+, no redistribution or re-hosting, no training
+  other models on them, and visible credit to MekaHime when you post videos or streams with her.
+- Built on [SenseVoice](https://github.com/FunAudioLLM/SenseVoice), [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS),
+  [bge-m3](https://huggingface.co/BAAI/bge-m3), [Qwen3-VL](https://github.com/QwenLM/Qwen3-VL),
+  [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) with the
+  [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), [OpenRouter](https://openrouter.ai),
+  [Ollama](https://ollama.com) and the [Model Context Protocol](https://modelcontextprotocol.io). Thank you.
 
-```text
-Tailscale_Serve_OpenAmika.bat          →  https://<your-machine>.<tailnet>.ts.net:8447/
-Tailscale_Serve_OpenAmika.bat off      →  remove the mapping
-```
+## Support
 
-tailscaled terminates HTTPS with a real certificate (needs MagicDNS + HTTPS enabled on the tailnet), so the
-microphone works from phones. One conversation tab at a time.
-
-## Who she is
-
-Amika (桜井美香, Sakurai Mika) grew up in Kyoto as the heir of a shrine family. At eighteen, tired of a life
-where every step was arranged, she flew to **your city** to live with **you** as roommates, after the two of you
-became close friends online. Her day runs on her clock: five possibilities per time slot (the morning walk,
-the supermarket, an afternoon event, the gym, the shrine routine at night, the late-night scrolling), picked
-once per day so her afternoon does not change mid-conversation.
-
-She calls you by the name you give her (`{user_name}` and `{city}` are filled in from the wizard), and the persona
-is written for a young man a little older than her (the Chinese prompts say 他). When you eat, she teases you
-with one fixed English line, "You Holy Big Fat Ass", in every language: a running joke her fans know. Everything
-is editable on the Setup page (Personality); [`docs/PERSONALITY.md`](docs/PERSONALITY.md) explains the three
-tiers, what is safe to change, and how *Reset everything* restores the shipped persona from `brain/defaults/`.
-
-The prompts are written in Chinese on purpose (her inner thoughts stay Chinese); she answers in the language
-you speak (English, Japanese or Chinese), and "say it in Japanese" switches for one turn.
-
-## Configuration
-
-| file | what | in git |
-|---|---|---|
-| `settings.json` | interpreters, ports, STT device, TTS URL and voice, embedder and vision blocks, optional services (her voice server) | no (copy of `settings.example.json`) |
-| `brain/.env` | API keys (`OPENROUTER_API_KEY`, optional providers) | no (copy of `.env.example`) |
-| `config/build_f.json` | your name, your city, her clock, memory budgets, reflection switches | yes (the wizard and Setup write your name and city here) |
-| `config/llm_roles.json` | the four LLM roles, presets and your selection | yes |
-| `config/word_replace.json` | speech-recognition fixes and TTS pronunciations (incl. your name's) | yes |
-| `config/tools.json`, `config/messengers.json` | MCP servers and bot tokens (from the `.example.json` files or the Tools / Setup pages) | no |
-| `brain/scenes.json` + the three templates | her persona | yes |
-
-Runtime data stays local and is git-ignored: `memory_f/` (her memory and the cost ledger), `brain/memories/`,
-`logs/`, and everything `setup_tts.py` downloads (`vendor/tts-engine/` except its code, `avatar/models/Amika/`).
-If you publish a fork, check `config/build_f.json` and `config/word_replace.json` first: after onboarding they
-contain your name and city.
-
-## Ports
-
-| service | port | where |
-|---|---|---|
-| web pages + speech gateway | 53000 | `settings.json` `chat_port` |
-| brain | 5202 | `brain_port` |
-| embedder | 8011 | `embedder.port` |
-| vision (optional) | 8014 | `vision.port` |
-| Discord/Telegram service | 5215 | fixed |
-| her voice server | 8002 | `tts_url` + `services.tts` |
-| Ollama | 11434 | Setup → Brain |
-| MQTT / zigbee2mqtt (optional) | 1883 / 8080 | `services` |
-
-Everything binds to 127.0.0.1.
-
-## Optional extras
-
-- **Tools** (Tools page, `docs/TOOLS.md`): any MCP server, stdio or HTTP, with per-tool `auto` / `confirm` /
-  `deny` policies. Personal task agents (Hermes Agent, nanoMuse) plug in through `servers/openamika-agents`.
-- **Smart home** (`IoT/README.md`): Zigbee plugs through mosquitto + zigbee2mqtt and the first-party
-  `openamika-iot` MCP server; Home Assistant's own MCP server works too. It stays off until you accept the IoT
-  safety statement (below).
-- **Text her** (`docs/MESSENGERS.md`): a Discord and/or Telegram bot that answers only the user ids you allow.
-- **Camera** (`vision/`): she describes what she sees while the camera is on; frames never leave the PC.
-
-### Smart home: safety and responsibility
-
-Before IoT turns on, the Tools page shows the IoT safety statement,
-[`docs/IOT_DISCLAIMER.md`](docs/IOT_DISCLAIMER.md) (English, 日本語, 简体中文), and IoT stays off unless you tick
-"I have read and accept this" and press Enable IoT; it asks again whenever the statement changes. In short: Amika
-runs on large language models, which are non-deterministic. She can mishear or misunderstand you, act on the wrong
-device or at the wrong time, repeat or skip an action, or be manipulated by what she reads or hears, and the
-models, networks, bridges, Zigbee/MQTT and device firmware can fail. There is no guarantee that she will not cause
-harm to your devices, your home, your data, or people or animals. Everything you connect is at your own risk;
-MekaHime Inc. and the contributors are not responsible for any outcome, damage, loss or injury, to the maximum extent
-the law allows, and the software is provided as is, without warranty (MIT License). Never connect anything that could
-cause danger if misused or abused: heaters and other heating appliances, gas or water valves and pumps, locks,
-garage doors and gates, alarms, medical, child- or pet-safety equipment, vehicles, machinery, high-power loads.
-Keep manual, physical control of every device; you can turn IoT off at any time. If you do not agree, do not enable
-IoT.
-
-## Tests
-
-```powershell
-envs\brain\python.exe -m pip install -r requirements-dev.txt
-envs\brain\python.exe -m pytest tests -k "not live"
-```
-
-About 380 offline tests cover the output contract, both streaming parsers (brain/speech parity), prompt
-assembly and caching layout, memory rendering, the usage ledger, the control proxies, the tool clerk, the IoT
-safety statement and its enforcement, and the launcher. Replay tests that need MekaHime's archived corpora skip themselves. GitHub Actions runs the same suite
-on every push (`.github/workflows/tests.yml`).
-
-## What is not included
-
-- **Amika's voice and Live2D model are not in git.** They are MekaHime assets; `scripts/setup_tts.py` downloads
-  them from [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) after you accept their
-  personal-use license.
-- **Model weights.** SenseVoiceSmall is downloaded by `scripts/download_sensevoice.py`, GPT-SoVITS and its
-  pretrained models by `scripts/setup_tts.py`; bge-m3 and the vision models download into the Hugging Face cache
-  on first use.
-- **Third-party stacks** you install yourself if you want them: Ollama, zigbee2mqtt, mosquitto, Hermes Agent,
-  nanoMuse.
-- **Anyone's data.** No memories, transcripts, logs or keys ship; the shipped identity is the neutral default
-  that the first-run wizard replaces.
-
-Code comments that cite `CONTRACT §…`, `TELEMETRY_SPEC §…` or `BUILD_SPEC` refer to MekaHime's internal design
-documents from the predecessor builds; they are not part of this repository.
-
-## Notes
-
-- The Use page shows a small "Support MekaHime" popup two minutes after loading and every 30 minutes; it has a
-  "never show this again" option (stored in your browser), and `?kiosk=1` in the address turns it off for clean
-  captures. The **About** page (in the menu) has the same button, the team and the licenses.
-- Her voice server sends WAV (what the speech gateway asks for), which every browser plays.
-
-## Credits
-
-Built by MekaHime. Standing on: [SenseVoice / FunASR](https://github.com/FunAudioLLM/SenseVoice) (speech
-recognition), [Silero VAD](https://github.com/snakers4/silero-vad), [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)
-(her voice), [BAAI bge-m3](https://huggingface.co/BAAI/bge-m3) (memory embeddings),
-[Qwen3-VL](https://github.com/QwenLM/Qwen3-VL) (vision), [PixiJS](https://pixijs.com) and
-[pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) with the
-[Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/) (the avatar), [OpenRouter](https://openrouter.ai) and
-[Ollama](https://ollama.com) (her brain), the [Model Context Protocol](https://modelcontextprotocol.io) (tools),
-[zigbee2mqtt](https://www.zigbee2mqtt.io) and [Eclipse Mosquitto](https://mosquitto.org) (smart home).
+Questions and bugs: [GitHub issues](https://github.com/zeekk0/OpenAmika/issues), hi@mekahime.com, or
+[Discord](https://discord.gg/mekahime). Support the project: https://www.mekahime.com/donate
 
 <p align="center">
   <a href="https://www.mekahime.com">
@@ -379,22 +134,3 @@ recognition), [Silero VAD](https://github.com/snakers4/silero-vad), [GPT-SoVITS]
     </picture>
   </a>
 </p>
-
-## License
-
-- OpenAmika's code and texts: **MIT**, © MekaHime Inc. (`LICENSE`).
-- Her voice server (`vendor/tts-engine/main.py`, a MekaHime build of GPT-SoVITS): **MIT** (its own `LICENSE`);
-  upstream GPT-SoVITS (MIT) and its pretrained models are downloaded by `scripts/setup_tts.py` under their own
-  licenses (`vendor/tts-engine/THIRD_PARTY_NOTICES.md`).
-- Bundled third-party files keep their licenses (`THIRD_PARTY_NOTICES.md`): SenseVoice model code (MIT),
-  PixiJS and pixi-live2d-display (MIT), and **Live2D Cubism Core** (`ui/vendor/live2dcubismcore.min.js`, the Live2D
-  Proprietary Software License Agreement, not MIT).
-- Downloaded models (SenseVoiceSmall, bge-m3, vision models, LLMs) are under their own licenses.
-- Amika's voice model, its reference audio and her Live2D model
-  ([MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)) are © MekaHime Inc. under the
-  MekaHime Amika personal-use license: personal, non-commercial use only, 18+, no redistribution, no training
-  other models on them, visible credit when you post her. The MIT License does not cover them.
-- Amika's character (her name, design and likeness) is © MekaHime Inc.; the MIT License grants no rights to
-  it. You are welcome to reshape the persona into your own companion.
-
-Questions: hi@mekahime.com · Support the open-sourcing work: https://www.mekahime.com/donate

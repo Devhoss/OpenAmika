@@ -1,11 +1,12 @@
 # TTS: the contract, the voice server, and the voice adapter
 
-**Her voice is one command away.** `python scripts/setup_tts.py` installs the OpenAmika voice server
-(`vendor/tts-engine`, a MekaHime build of GPT-SoVITS, MIT) together with Amika's voice and her Live2D model from
-Hugging Face (personal-use license, 18+; the script shows it and asks you to accept it first), and
-`settings.example.json` already has the launcher start that server on port 8002. Without a voice server she still
-works: her replies appear as text (live subtitles), the Live2D avatar still acts them out, and the launcher shows
-the TTS row yellow ("she will not speak").
+**Her voice is one command away.** `envs\brain\Scripts\python.exe scripts\setup_tts.py` (after
+`scripts\setup_windows.ps1`; any Python 3.11 runs it) installs Amika's voice and her Live2D model from Hugging Face
+(personal-use license, 18+; the script shows it and asks you to accept it first) and the OpenAmika voice server
+(`vendor/tts-engine`, a MekaHime build of GPT-SoVITS, MIT), and `settings.example.json` already has the launcher
+start that server on port 8002. Without a voice server she still works in text: her replies appear as live
+subtitles and the Live2D avatar still acts them out, but her voice is an essential part, so the launcher's
+`TTS (voice)` row and the health light show it red with the command that installs it.
 
 ## The contract the speech layer speaks
 
@@ -38,14 +39,17 @@ OpenAmika ships its own: the **OpenAmika voice server** (`vendor/tts-engine/main
 GPT-SoVITS v2ProPlus, MIT), derived from the OpenSakura voice server. One command installs it with Amika's voice:
 
 ```text
-python scripts\setup_tts.py          type yes to accept her license; --cpu without an NVIDIA GPU
+envs\brain\Scripts\python.exe scripts\setup_tts.py     type yes to accept her license; --cpu without an NVIDIA GPU
 ```
 
-- It builds `vendor/tts-engine/` from public sources: a Python 3.11 venv with CUDA 12.8 torch, upstream
-  GPT-SoVITS at a pinned commit with its pretrained models, and Amika's voice from the Hugging Face repository
-  [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). The same repository, under the same
-  license, holds her Live2D model; the script puts it into `avatar/models/Amika/` (`--skip-avatar` leaves it out).
-  Every download is pinned by size and SHA-256; a re-run verifies and skips what is already there.
+- First Amika's voice and her Live2D model from the Hugging Face repository
+  [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) (same license for both), file by file
+  with the standard library and checked against `scripts/MekaHime_Amika.manifest.json` (size and SHA-256 of all 250
+  files at the pinned revision): the voice into `vendor/tts-engine/Speakers/MekaHime_Amika/`, the model into
+  `avatar/models/Amika/` (`--skip-avatar` leaves it out). Then it builds the rest of `vendor/tts-engine/` from public
+  sources: a Python 3.11 venv with CUDA 12.8 torch, upstream GPT-SoVITS at a pinned commit with its pretrained
+  models. Every download is pinned by size and SHA-256; a re-run verifies and skips what is already there, and
+  `--verify` checks everything without downloading.
 - `settings.example.json` lists it under `services.tts`, so the launcher starts it on port 8002 with the rest and
   waits for `GET /ping` (models plus four warm-up lines, about 20 s on a GPU). `tts_url` points at it and
   `tts_character` (`MekaHime_Amika`) names the voice.

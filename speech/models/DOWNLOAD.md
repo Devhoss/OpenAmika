@@ -2,10 +2,10 @@
 
 The speech layer uses [SenseVoiceSmall](https://github.com/FunAudioLLM/SenseVoice) (FunAudioLLM / FunASR) for
 fully local speech-to-text (ASR + language ID + emotion + audio-event tags). Its files are **not** in this
-repository; fetch them once:
+repository. `scripts\setup_windows.ps1` (`scripts/setup_core.py`) fetches them; by hand (any Python 3 runs it):
 
 ```powershell
-envs\speech\python.exe scripts\download_sensevoice.py
+envs\brain\Scripts\python.exe scripts\download_sensevoice.py
 ```
 
 The script downloads the six files below from ModelScope (Hugging Face as a fallback), checks each against the
@@ -26,7 +26,7 @@ By hand instead: download those files from https://www.modelscope.cn/models/iic/
 folder, or with the `modelscope` package that speech/requirements.txt installs:
 
 ```powershell
-envs\speech\python.exe -c "from modelscope import snapshot_download; snapshot_download('iic/SenseVoiceSmall', local_dir='speech/models')"
+envs\speech\Scripts\python.exe -c "from modelscope import snapshot_download; snapshot_download('iic/SenseVoiceSmall', local_dir='speech/models')"
 ```
 
 GPU strongly recommended (`speech_device: "cuda:0"` in settings.json); `"cpu"` works but adds latency.

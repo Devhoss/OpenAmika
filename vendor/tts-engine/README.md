@@ -9,10 +9,14 @@ voice comes from a Hugging Face repository. Only `main.py`, `requirements-tts.tx
 
 ## Install
 
-```bash
-python scripts/setup_tts.py            # Windows 10/11 with an NVIDIA GPU (CUDA 12.8 torch): tested
-python scripts/setup_tts.py --cpu      # no GPU: CPU torch (works, slower)
+```powershell
+envs\brain\Scripts\python.exe scripts\setup_tts.py          # Windows 10/11 with an NVIDIA GPU (CUDA 12.8 torch): tested
+envs\brain\Scripts\python.exe scripts\setup_tts.py --cpu    # no GPU: CPU torch (works, slower)
+envs\brain\Scripts\python.exe scripts\setup_tts.py --verify # check every file; download and install nothing
 ```
+
+(`envs\brain` comes from `scripts\setup_windows.ps1`; any Python 3.11 can run the script, for example
+`py -3.11 scripts\setup_tts.py`.)
 
 Then start OpenAmika (`Start_OpenAmika.bat`); `<brain python> launch.py --check` shows the **TTS (voice)** row.
 
@@ -33,14 +37,19 @@ a build on Windows and Linux x86_64 (on macOS: `brew install ffmpeg`); without i
 `warning`. WAV output and speed changes do not need it.
 
 **Amika's voice** is the Hugging Face repository
-[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). No account or token is needed (the
-script reads `HF_TOKEN` if you set one, which only a private copy of the repository needs). It is under MekaHime's
+[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika). No account or token is needed once
+the repository is public; before that the script needs a read token in `HF_TOKEN` (or a saved `hf auth login`),
+which it sends to the Hugging Face host only, never to the CDN it redirects to, and never prints or stores. A
+refusal says what to do (`Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is not public yet.
+…`). `HF_ENDPOINT` picks a mirror, as in huggingface_hub. It is under MekaHime's
 personal-use license (`LICENSE` in that repository: personal, hobbyist use, 18+, no training on it, no re-hosting
 or resale, visible credit): the script shows it in short before anything else and downloads the voice only after
 you type `yes`; `--accept-voice-license` accepts it up front for unattended installs. Without it the script
-finishes everything else and says how to get the voice. The voice is downloaded at a pinned revision of that
-repository (`a3934e5a`, 69 emotion tags) and its two weight files are checked by size and SHA-256 like every
-other download. The same repository, under the same license, holds **her Live2D model** (`live2d/Amika`): the
+finishes everything else and says how to get the voice. The voice is downloaded first, before the venv and
+torch, with the standard library only, at a pinned revision of that repository (`a3934e5a`, 69 emotion tags), and
+every one of its files is checked by size and SHA-256 against `scripts/MekaHime_Amika.manifest.json` (the full list
+of the repository at that revision, 250 files); an interrupted download resumes from its `.part` file. The same
+repository, under the same license, holds **her Live2D model** (`live2d/Amika`), downloaded and checked the same way: the
 script puts it into `avatar/models/Amika/`, where the Use page finds it (`--skip-avatar` leaves it out and the
 stage then says "No Live2D model yet"; `--update-avatar` downloads it again and keeps a `banks.json` you edited in
 Setup). After the downloads the script checks that every tag OpenAmika's voice adapter can send (`V1_IDS` in
@@ -52,9 +61,11 @@ Re-running is safe: finished steps are verified (SHA-256) and skipped; a re-run 
 an existing GPT-SoVITS checkout must still have the pinned `TTS.py`, and other locally edited upstream files are
 listed as a warning. A step that fails is reported and the steps that do not need it still run; the summary at
 the end lists every step (`OK`, `--` skipped or optional, `!!` failed) and the exit code is non-zero if any
-failed. Useful flags: `--skip-voice`, `--voice-from <folder>` (copy a voice you already have),
-`--update-voice`, `--voice-revision <rev>` (another revision of the voice repository; its weights are then not
-checked against the pins), `--skip-avatar`, `--update-avatar`, `--avatar-dir <path>`, `--skip-ffmpeg`,
+failed. Useful flags: `--verify` (check every file of her voice, her Live2D model and the server; download and
+install nothing), `--assets-only` (her voice and Live2D model only), `--from-dir <folder>` (both from a local copy
+laid out like the repository, still checked file by file), `--skip-voice`, `--voice-from <folder>` (copy a voice you
+already have), `--update-voice`, `--voice-revision <rev>` (another revision of the voice repository; its files are
+then not checked against the pins), `--skip-avatar`, `--update-avatar`, `--avatar-dir <path>`, `--skip-ffmpeg`,
 `--reinstall`, `--engine-dir <path>`, `--python <interpreter>`, `--self-test` (starts the server once and speaks
 a line the way OpenAmika asks for one).
 
@@ -80,8 +91,8 @@ vendor/tts-engine/
 avatar/models/Amika/         her Live2D model (from the same repository; outside this folder)
 ```
 
-Every model and data file, the voice weights and the model's main files are pinned by repository revision, size
-and SHA-256 in `scripts/setup_tts.py`. GPT-SoVITS is pinned by commit. Without git, the zip GitHub serves for that
+Every model and data file is pinned by repository revision, size and SHA-256 in `scripts/setup_tts.py`, and every
+file of her voice and Live2D model in `scripts/MekaHime_Amika.manifest.json`. GPT-SoVITS is pinned by commit. Without git, the zip GitHub serves for that
 commit is checked before unpacking against a pinned SHA-256 over all 282 of its files, and the unpacked
 `GPT_SoVITS/TTS_infer_pack/TTS.py` against its own pinned SHA-256 (again on every re-run, also for a git
 checkout). A download that does not match its pinned size or SHA-256 is deleted and stops that step at once
