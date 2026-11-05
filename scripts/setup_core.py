@@ -614,7 +614,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         start = ".\\Start_OpenAmika.bat" if IS_WIN else f"{brain_py} launch.py"
         pad = max(len(voice), len(start)) + 3
         print("Done. Next:")
-        print(f"  1. {voice.ljust(pad)}her voice and Live2D model (type yes to accept her license)")
+        print(f"  1. {voice.ljust(pad)}her voice, her Live2D model and the paper doll (type yes to accept her license)")
         print(f"  2. {start.ljust(pad)}start her; the page opens at http://localhost:53000")
     return rc or (1 if bad else 0)
 

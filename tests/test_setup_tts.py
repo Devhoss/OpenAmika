@@ -1,9 +1,11 @@
-"""scripts/setup_tts.py: her voice and Live2D model from Hugging Face, against a local stand-in for the Hub. Offline.
+"""scripts/setup_tts.py: her voice, her Live2D model and the paper doll from Hugging Face, against a local stand-in for
+the Hub. Offline.
 
 The stand-in serves a tiny synthetic copy of the repository layout (never her real files): public, or private (401
 without the right bearer token, as the Hub answers anonymous requests for a private repository). Large files are
 answered with a redirect to a second server on another port, like the Hub's CDN, which must never see the token;
-the clips are answered with a same-host redirect, which must keep it.
+the clips are answered with a same-host redirect, which must keep it. Like the real repository, the pinned revision
+(VOICE_REV) has no live2d/Host/: the paper doll is served only at its own revision (PAPER_DOLL_REV).
 """
 import contextlib
 import hashlib
@@ -42,8 +44,19 @@ REPO_FILES = {
     "live2d/Amika/AmikaV4.8192/texture_00.png": b"png" * 2500,
     "live2d/Amika/idle1.motion3.json": b'{"Version": 3}',
     "live2d/Amika/banks.json": b'{"banks": {}}',
+    # the paper doll: its own revision, its banks.json says "role": "agent", its model3 names no motions
+    "live2d/Host/host.model3.json": json.dumps({"FileReferences": {
+        "Moc": "host.moc3", "Textures": ["host.2048/texture_00.png"]}}).encode(),
+    "live2d/Host/host.moc3": b"doll-moc" * 400,
+    "live2d/Host/host.2048/texture_00.png": b"doll-png" * 300,
+    "live2d/Host/idle1.motion3.json": b'{"Version": 0}',
+    "live2d/Host/think1.motion3.json": b'{"Version": 0, "think": 1}',
+    "live2d/Host/banks.json": json.dumps({"config": {"display_name": "Host (agent avatar)", "role": "agent"},
+                                          "banks": {}}).encode(),
 }
 CDN_SUFFIXES = (".ckpt", ".pth", ".moc3", ".png")           # served from the "CDN" (another host)
+DOLL = "live2d/Host/"
+DOLL_REV = "d011" * 10                                      # stands in for the revision that adds live2d/Host/
 
 
 class Hub:
@@ -56,6 +69,7 @@ class Hub:
         self.cdn_saw_auth = []
         self.same_host_redirect_auth = []
         self.ranges = []
+        self.revisions = {}                   # path -> the revision it was last asked for at
 
     def denied(self, handler):
         return self.private and handler.headers.get("Authorization") != f"Bearer {TOKEN}"
@@ -105,13 +119,14 @@ def make_servers(hub):
                 rel = path.split("/", 4)[4]                       # /api/resolve-cache/models/<path>
 
                 return self.send_file(REPO_FILES[rel])
-            prefix = f"/{st.VOICE_REPO}/resolve/{st.VOICE_REV}/"
-            if not path.startswith(prefix):
+            prefix = f"/{st.VOICE_REPO}/resolve/"
+            rev, _, rel = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
+            if not rev or rev not in (st.VOICE_REV, DOLL_REV):
                 return self.empty(404, **{"X-Error-Code": "RevisionNotFound"})
             if hub.denied(self):
                 return self.empty(401, **{"X-Error-Code": "RepoNotFound"})
-            rel = path[len(prefix):]
-            if rel not in REPO_FILES or rel in hub.gone:
+            hub.revisions[rel] = rev
+            if rel not in REPO_FILES or rel in hub.gone or (rel.startswith(DOLL) and rev != DOLL_REV):
                 return self.empty(404, **{"X-Error-Code": "EntryNotFound"})
             if rel.endswith(CDN_SUFFIXES):
                 return self.empty(302, Location=f"{cdn_base}/blob/{urllib.parse.quote(rel)}")
@@ -141,6 +156,7 @@ def hub(tmp_path, monkeypatch):
     monkeypatch.setattr(st, "HF", base)
     monkeypatch.setattr(st, "TOKEN_HOSTS", ("huggingface.co", "127.0.0.1"))   # the stand-in plays huggingface.co
     monkeypatch.setattr(st, "VOICE_ADAPTER", tmp_path / "no-adapter.py")      # the real adapter wants all 67 tags
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", DOLL_REV)                       # as after the doll's upload
     for var in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HF_TOKEN_PATH"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")                   # never read this machine's saved login
@@ -150,10 +166,13 @@ def hub(tmp_path, monkeypatch):
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         (repo / rel).write_bytes(data)
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(json.dumps({"repo": st.VOICE_REPO, "revision": st.VOICE_REV, "files": {
-        rel: [len(data), hashlib.sha256(data).hexdigest()] for rel, data in REPO_FILES.items()}}), "utf-8")
+    pins = {rel: [len(data), hashlib.sha256(data).hexdigest()] for rel, data in REPO_FILES.items()}
+    manifest.write_text(json.dumps({"repo": st.VOICE_REPO, "revision": st.VOICE_REV,
+                                    "files": {r: e for r, e in pins.items() if not r.startswith(DOLL)},
+                                    "paper_doll": {"files": {r: e for r, e in pins.items() if r.startswith(DOLL)}}}),
+                        "utf-8")
     hub.repo, hub.manifest = repo, manifest
-    hub.engine, hub.avatar = tmp_path / "engine", tmp_path / "avatar" / "Amika"
+    hub.engine, hub.avatar, hub.doll = tmp_path / "engine", tmp_path / "avatar" / "Amika", tmp_path / "avatar" / "Host"
     yield hub
     for server in (hf, cdn):
         server.shutdown()
@@ -162,7 +181,7 @@ def hub(tmp_path, monkeypatch):
 
 def run(hub, *extra):
     argv = ["--assets-only", "--engine-dir", str(hub.engine), "--avatar-dir", str(hub.avatar),
-            "--manifest", str(hub.manifest), *extra]
+            "--paper-doll-dir", str(hub.doll), "--manifest", str(hub.manifest), *extra]
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = st.main(argv)
     rows = {name: (mark.strip(), detail) for mark, name, detail in st.ROWS}
@@ -172,11 +191,12 @@ def run(hub, *extra):
 def installed(hub):
     voice = {rel: (hub.engine / "Speakers" / "MekaHime_Amika" / rel) for rel in REPO_FILES
              if not rel.startswith("live2d/") and rel != ".gitattributes"}
-    model = {rel: hub.avatar / rel[len("live2d/Amika/"):] for rel in REPO_FILES if rel.startswith("live2d/")}
-    return voice, model
+    model = {rel: hub.avatar / rel[len("live2d/Amika/"):] for rel in REPO_FILES if rel.startswith("live2d/Amika/")}
+    doll = {rel: hub.doll / rel[len(DOLL):] for rel in REPO_FILES if rel.startswith(DOLL)}
+    return voice, model, doll
 
 
-VOICE, MODEL = "voice MekaHime_Amika", "Live2D model Amika"
+VOICE, MODEL, PAPER_DOLL = "voice MekaHime_Amika", "Live2D model Amika", "paper doll Host"
 
 
 def test_public_repo_installs_her_voice_and_model_and_a_rerun_downloads_nothing(hub):
@@ -185,24 +205,30 @@ def test_public_repo_installs_her_voice_and_model_and_a_rerun_downloads_nothing(
     assert rows[VOICE][0] == "OK" and "downloaded 8 file(s)" in rows[VOICE][1] and "8 files verified" in rows[VOICE][1]
     assert "2/2 emotion tags with a clip" in rows[VOICE][1]
     assert rows[MODEL][0] == "OK" and "AmikaV4.model3.json, 1 motions" in rows[MODEL][1]
-    voice, model = installed(hub)
-    for rel, path in {**voice, **model}.items():
+    assert rows[PAPER_DOLL][0] == "OK" and f"downloaded 6 file(s) from {st.VOICE_REPO}@{DOLL_REV[:8]}" in rows[PAPER_DOLL][1]
+    assert "host.model3.json, 2 motions" in rows[PAPER_DOLL][1] and "her helpers" in rows[PAPER_DOLL][1]
+    voice, model, doll = installed(hub)
+    for rel, path in {**voice, **model, **doll}.items():
         assert path.read_bytes() == REPO_FILES[rel], rel
+    assert all(hub.revisions[rel] == DOLL_REV for rel in doll)           # the doll from its own revision,
+    assert all(hub.revisions[rel] == st.VOICE_REV for rel in {**voice, **model})   # the rest from the pinned one
     assert not (hub.engine / "Speakers" / "MekaHime_Amika" / ".gitattributes").exists()
-    assert not list(hub.engine.rglob("*.part")) and not list(hub.avatar.rglob("*.part"))
+    assert not list(hub.engine.rglob("*.part")) and not list(hub.avatar.rglob("*.part")) and not list(hub.doll.rglob("*.part"))
     assert hub.cdn_saw_auth == []
+    assert "Done: her voice, her Live2D model and the paper doll are in place." in out
     served = hub.requests
     rc, rows, out = run(hub)                         # installed: no question, no download, every file re-checked
     assert rc == 0, out
     assert hub.requests == served
     assert rows[VOICE][1].count("existing; 8 files verified") == 1
+    assert f"existing; 6 files verified against {st.VOICE_REPO}@{DOLL_REV[:8]}" in rows[PAPER_DOLL][1]
 
 
 def test_private_repo_without_a_token_says_what_to_do(hub):
     hub.private = True
     rc, rows, out = run(hub, "--accept-voice-license")
     assert rc == 1
-    for name in (VOICE, MODEL):
+    for name in (VOICE, MODEL, PAPER_DOLL):
         mark, detail = rows[name]
         assert mark == "!!" and "HTTP 401" in detail and "not public yet" in detail and "HF_TOKEN" in detail, detail
     assert "Traceback" not in out
@@ -243,35 +269,41 @@ def test_a_wrong_token_is_named_as_the_problem(hub, monkeypatch):
 def test_without_the_license_nothing_is_downloaded(hub):
     rc, rows, out = run(hub)
     assert rc == 1 and hub.requests == 0
-    for name in (VOICE, MODEL):
+    for name in (VOICE, MODEL, PAPER_DOLL):
         assert rows[name][0] == "!!" and "license was not accepted" in rows[name][1] and "--accept-voice-license" in rows[name][1]
+    assert "her voice, her Live2D model and the paper doll" in rows[PAPER_DOLL][1]
 
 
 def test_verify_finds_missing_and_damaged_files_and_a_rerun_repairs_them(hub):
     assert run(hub, "--accept-voice-license")[0] == 0
-    voice, model = installed(hub)
+    voice, model, doll = installed(hub)
     voice["references/开心.wav"].write_bytes(b"truncated")
     model["live2d/Amika/idle1.motion3.json"].unlink()
+    doll["live2d/Host/think1.motion3.json"].unlink()
     served = hub.requests
     rc, rows, out = run(hub, "--verify")
     assert rc == 1 and hub.requests == served                       # --verify never downloads
     assert "references/开心.wav" in rows[VOICE][1] and "1 of 8 files" in rows[VOICE][1]
     assert "idle1.motion3.json" in rows[MODEL][1]
+    assert rows[PAPER_DOLL][0] == "!!" and "1 of 6 files" in rows[PAPER_DOLL][1] and "think1.motion3.json" in rows[PAPER_DOLL][1]
     assert "run this script without --verify" in out
     rc, rows, out = run(hub)                                        # installed before: repaired without asking again
     assert rc == 0, out
     assert voice["references/开心.wav"].read_bytes() == REPO_FILES["references/开心.wav"]
-    assert model["live2d/Amika/idle1.motion3.json"].is_file()
-    assert run(hub, "--verify")[0] == 0
+    assert model["live2d/Amika/idle1.motion3.json"].is_file() and doll["live2d/Host/think1.motion3.json"].is_file()
+    rc, rows, out = run(hub, "--verify")
+    assert rc == 0 and "Verified: her voice, her Live2D model and the paper doll are complete." in out
 
 
 def test_her_edited_banks_json_is_kept(hub):
     assert run(hub, "--accept-voice-license")[0] == 0
-    _, model = installed(hub)
+    _, model, doll = installed(hub)
     model["live2d/Amika/banks.json"].write_text('{"banks": {"casual_happy": {}}}', "utf-8")
+    doll["live2d/Host/banks.json"].write_text('{"config": {"role": "agent", "nx": 0.1}, "banks": {}}', "utf-8")
     rc, rows, _ = run(hub, "--update-avatar")
-    assert rc == 0 and "your banks.json kept" in rows[MODEL][1]
+    assert rc == 0 and "your banks.json kept" in rows[MODEL][1] and "your banks.json kept" in rows[PAPER_DOLL][1]
     assert "casual_happy" in model["live2d/Amika/banks.json"].read_text("utf-8")
+    assert '"nx": 0.1' in doll["live2d/Host/banks.json"].read_text("utf-8")
 
 
 def test_an_unedited_banks_json_follows_a_newer_pin_and_an_edited_one_stays(hub, monkeypatch):
@@ -350,18 +382,20 @@ def test_an_interrupted_download_resumes_from_its_part_file(hub):
 
 def test_a_file_gone_from_the_revision_says_to_update(hub):
     hub.gone.add("references/难过.wav")
+    hub.gone.add("live2d/Host/idle1.motion3.json")
     rc, rows, _ = run(hub, "--accept-voice-license")
     assert rc == 1 and "HTTP 404" in rows[VOICE][1] and "git pull" in rows[VOICE][1]
     assert rows[MODEL][0] == "OK"                                    # the model does not need the voice
+    assert rows[PAPER_DOLL][0] == "!!" and f"at revision {DOLL_REV[:8]}" in rows[PAPER_DOLL][1]   # its own revision
 
 
 def test_from_dir_installs_offline_and_checks_every_file(hub):
     hub.private = True                                               # the Hub would refuse: it must not be asked
     rc, rows, out = run(hub, "--accept-voice-license", "--from-dir", str(hub.repo))
     assert rc == 0, out
-    assert hub.requests == 0 and "copied 8 file(s)" in rows[VOICE][1]
-    voice, model = installed(hub)
-    assert all(p.read_bytes() == REPO_FILES[r] for r, p in {**voice, **model}.items())
+    assert hub.requests == 0 and "copied 8 file(s)" in rows[VOICE][1] and "copied 6 file(s)" in rows[PAPER_DOLL][1]
+    voice, model, doll = installed(hub)
+    assert all(p.read_bytes() == REPO_FILES[r] for r, p in {**voice, **model, **doll}.items())
     (hub.repo / "references" / "开心.wav").write_bytes(b"RIFF-other" * 50)   # same size, other bytes
     voice["references/开心.wav"].unlink()
     rc, rows, _ = run(hub, "--from-dir", str(hub.repo))
@@ -376,6 +410,15 @@ def test_write_manifest_reproduces_the_pinned_list(hub, tmp_path):
     written = json.loads(out.read_text("utf-8"))
     pinned = json.loads(hub.manifest.read_text("utf-8"))
     assert written["files"] == pinned["files"] and written["revision"] == st.VOICE_REV + "x"
+    assert written["paper_doll"]["files"] == pinned["paper_doll"]["files"]          # live2d/Host/ in its own block
+    assert not any(rel.startswith(DOLL) for rel in written["files"])
+    # a copy without the doll keeps the pins that are there (the doll stays at its own revision)
+    for rel in [r for r in REPO_FILES if r.startswith(DOLL)]:
+        (hub.repo / rel).unlink()
+    with contextlib.redirect_stdout(io.StringIO()) as said:
+        assert st.main(["--write-manifest", str(hub.repo), "--voice-revision", st.VOICE_REV + "y", "--manifest", str(out)]) == 0
+    again = json.loads(out.read_text("utf-8"))
+    assert again["paper_doll"]["files"] == pinned["paper_doll"]["files"] and "pins were kept" in said.getvalue()
 
 
 def test_hf_token_sources_and_their_order(monkeypatch, tmp_path):
@@ -406,3 +449,90 @@ def test_the_shipped_manifest_pins_her_whole_repository():
     assert list(voice)[-1] == "character.json" and list(model)[-1] == "AmikaV4.model3.json"   # written last
     assert sum(r.endswith(".motion3.json") for r in model) == 142 and sum(r.endswith(".exp3.json") for r in model) == 25
     assert all(len(sha) == 64 and size > 0 for size, sha in m["files"].values())
+
+
+def test_the_shipped_manifest_pins_the_paper_doll():
+    """live2d/Host/: 70 files, 2,349,288 bytes, 64 motions in seven families, its banks.json before its model3 (the
+    folder never counts as a model of hers), at a revision that is either the placeholder or a full commit."""
+    m = st.load_manifest(st.MANIFEST)
+    doll = st.model_files(m["paper_doll"], st.PAPER_DOLL_PATH)
+    assert len(doll) == 70 and sum(size for size, _ in doll.values()) == 2_349_288
+    assert {"host.model3.json", "host.moc3", "host.physics3.json", "host.cdi3.json", "host.2048/texture_00.png",
+            "banks.json"} <= set(doll)
+    families = {"idle": 15, "talk": 14, "listen": 7, "think": 6, "happy": 9, "worried": 6, "surprise": 7}
+    for family, count in families.items():
+        assert sum(r.startswith(family) and r.endswith(".motion3.json") for r in doll) == count, family
+    assert sum(r.endswith(".motion3.json") for r in doll) == 64
+    assert list(doll)[-1] == "host.model3.json"
+    assert all(len(sha) == 64 and size > 0 for size, sha in doll.values())
+    assert not any(r.startswith(st.PAPER_DOLL_PATH + "/") for r in m["files"])       # not at the voice's revision
+    assert st.PAPER_DOLL_REV == "" or (len(st.PAPER_DOLL_REV) == 40 and int(st.PAPER_DOLL_REV, 16) >= 0)
+
+
+def test_the_paper_doll_waits_for_its_revision_and_is_never_fetched_before(hub, monkeypatch):
+    """PAPER_DOLL_REV empty (before the doll's upload): her voice and model install as always, the doll is not
+    requested at all, and its row says why, without failing the run."""
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", "")
+    rc, rows, out = run(hub, "--accept-voice-license")
+    assert rc == 0, out
+    assert rows[VOICE][0] == "OK" and rows[MODEL][0] == "OK"
+    assert rows[PAPER_DOLL][0] == "--" and "not downloaded" in rows[PAPER_DOLL][1] and "PAPER_DOLL_REV" in rows[PAPER_DOLL][1]
+    assert not any(rel.startswith(DOLL) for rel in hub.revisions) and not hub.doll.exists()
+    assert "Done: her voice and her Live2D model are in place." in out
+    assert run(hub, "--verify")[0] == 0                              # nothing to verify yet: not a failure either
+
+
+def test_a_doll_in_place_is_checked_against_its_pins_before_its_revision_is_pinned(hub, monkeypatch):
+    assert run(hub, "--accept-voice-license")[0] == 0
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", "")
+    served = hub.requests
+    rc, rows, out = run(hub)
+    assert rc == 0 and rows[PAPER_DOLL][0] == "OK" and "existing; 6 files verified against the pinned list" in rows[PAPER_DOLL][1]
+    doll = installed(hub)[2]
+    doll["live2d/Host/host.moc3"].write_bytes(b"x" * len(REPO_FILES["live2d/Host/host.moc3"]))
+    rc, rows, _ = run(hub)
+    assert rc == 0 and rows[PAPER_DOLL][0] == "--" and "host.moc3" in rows[PAPER_DOLL][1]
+    assert "cannot be repaired from Hugging Face" in rows[PAPER_DOLL][1]
+    assert hub.requests == served                                    # checked, never fetched
+
+
+def test_from_dir_installs_the_paper_doll_before_its_revision_is_pinned(hub, monkeypatch):
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", "")
+    rc, rows, out = run(hub, "--accept-voice-license", "--from-dir", str(hub.repo))
+    assert rc == 0, out
+    assert rows[PAPER_DOLL][0] == "OK" and "copied 6 file(s)" in rows[PAPER_DOLL][1] and hub.requests == 0
+    assert all(p.read_bytes() == REPO_FILES[r] for r, p in installed(hub)[2].items())
+
+
+def test_skip_paper_doll_leaves_it_out(hub):
+    rc, rows, out = run(hub, "--accept-voice-license", "--skip-paper-doll")
+    assert rc == 0, out
+    assert rows[PAPER_DOLL][0] == "--" and "--skip-paper-doll" in rows[PAPER_DOLL][1]
+    assert not any(rel.startswith(DOLL) for rel in hub.revisions) and not hub.doll.exists()
+
+
+def test_a_doll_without_its_agent_role_is_named(hub):
+    assert run(hub, "--accept-voice-license")[0] == 0
+    banks = installed(hub)[2]["live2d/Host/banks.json"]
+    banks.write_text('{"config": {"display_name": "mine"}, "banks": {}}', "utf-8")     # edited: kept, but no role
+    rc, rows, _ = run(hub)
+    assert rc == 1 and rows[PAPER_DOLL][0] == "!!" and '"role": "agent"' in rows[PAPER_DOLL][1]
+    banks.unlink()                                                   # its fix: delete it, run again
+    rc, rows, _ = run(hub)
+    assert rc == 0 and rows[PAPER_DOLL][0] == "OK" and banks.read_bytes() == REPO_FILES["live2d/Host/banks.json"]
+
+
+def test_the_license_question_counts_the_doll_only_when_it_can_come(hub, monkeypatch):
+    """An install that already has her voice and model is asked again for the doll (the license covers it too), but
+    only once the doll can be downloaded; never while PAPER_DOLL_REV is empty."""
+    assert run(hub, "--accept-voice-license", "--skip-paper-doll")[0] == 0
+    asked = []
+    monkeypatch.setattr(st, "ask_voice_license", lambda: asked.append(1) or False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", "")
+    rc, rows, _ = run(hub)
+    assert asked == [] and rc == 0 and rows[PAPER_DOLL][0] == "--"
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", DOLL_REV)
+    rc, rows, _ = run(hub)
+    assert asked == [1] and rc == 1 and "license was not accepted" in rows[PAPER_DOLL][1]   # declined: not downloaded
+    assert rows[VOICE][0] == "OK" and not hub.doll.exists()

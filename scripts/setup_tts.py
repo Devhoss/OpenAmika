@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 MekaHime Inc.
 # SPDX-License-Identifier: MIT
-"""Install Amika's voice and her Live2D model (from Hugging Face) and the OpenAmika voice server (a MekaHime build
-of GPT-SoVITS) that speaks with that voice.
+"""Install Amika's voice, her Live2D model and the paper doll that stands in for her helpers (from Hugging Face) and
+the OpenAmika voice server (a MekaHime build of GPT-SoVITS) that speaks with that voice.
 
     envs\\brain\\Scripts\\python.exe scripts\\setup_tts.py   # Windows, after scripts\\setup_windows.ps1 (any Python 3.11 works)
     python scripts/setup_tts.py --cpu                # no NVIDIA GPU: CPU torch (slow)
     python scripts/setup_tts.py --accept-voice-license   # unattended: accept her license up front
     python scripts/setup_tts.py --verify             # check everything file by file; download and install nothing
-    python scripts/setup_tts.py --assets-only        # only her voice and Live2D model, no voice server
+    python scripts/setup_tts.py --assets-only        # only her voice, her Live2D model and the paper doll, no voice server
     python scripts/setup_tts.py --from-dir <folder>  # her files from a local copy of the repository (offline)
     python scripts/setup_tts.py --self-test          # also start the server once and synthesize a line
 
-First it shows her personal-use license in short and asks you to type yes (her voice and her Live2D model share one
-license), so the rest can run unattended. Then:
+First it shows her personal-use license in short and asks you to type yes (her voice, her Live2D model and the paper
+doll share one license), so the rest can run unattended. Then:
 
-1. Her voice and her Live2D model, from the Hugging Face repository MekaHime/MekaHime_Amika at a pinned revision,
-   file by file with the standard library (no venv needed, so a failed torch install never costs her voice or her
-   body). Every file is checked against its size and SHA-256 in scripts/MekaHime_Amika.manifest.json:
+1. Her voice, her Live2D model and the paper doll, from the Hugging Face repository MekaHime/MekaHime_Amika at pinned
+   revisions, file by file with the standard library (no venv needed, so a failed torch install never costs her voice
+   or her body). Every file is checked against its size and SHA-256 in scripts/MekaHime_Amika.manifest.json:
      vendor/tts-engine/Speakers/MekaHime_Amika/   her voice: character.json, MekaHime_Amika.ckpt (GPT weights),
                                                   MekaHime_Amika.pth (SoVITS weights), references/emotions.json and one
                                                   clip per emotion tag (69), the README and LICENSE of the repository
      avatar/models/Amika/                         her Live2D model (live2d/Amika in the repository), where the Use page
                                                   finds it; a banks.json edited on the Setup page is never overwritten
+     avatar/models/Host/                          the paper doll (live2d/Host in the repository): MekaHime's folded-paper
+                                                  shrine doll, which the Use page seats beside her while a task agent
+                                                  (Hermes Agent, nanoMuse) is switched on; its banks.json says
+                                                  "role": "agent". Pinned at its own revision (PAPER_DOLL_REV)
    The repository is public from OpenAmika's public release on; before that it needs a Hugging Face read token in
    HF_TOKEN (or a saved `hf auth login`). The token goes to huggingface.co only (never to the CDN it redirects to,
    nor to a mirror) and is never printed or saved. HF_ENDPOINT picks a mirror, as in huggingface_hub; every file is
@@ -35,9 +39,9 @@ license), so the rest can run unattended. Then:
                      its front-end builds on first use
      nltk_data/      English POS tagger + CMUdict for the English front-end
      ffmpeg/         ffmpeg + ffprobe for Opus output (optional: WAV works without it)
-3. Checks: the voice has a clip for every tag OpenAmika's voice adapter (speech/voice_adapter.py) can send, the Live2D
-   model has every file its .model3.json names, and settings.json starts this server (services.tts) with that voice
-   (tts_character). settings.json is never edited.
+3. Checks: the voice has a clip for every tag OpenAmika's voice adapter (speech/voice_adapter.py) can send, each Live2D
+   model has every file its .model3.json names (the paper doll also its "role": "agent"), and settings.json starts
+   this server (services.tts) with that voice (tts_character). settings.json is never edited.
 
 Needs Python 3.11 or 3.12 (scipy, onnxruntime and matplotlib at the pinned versions have no wheels for 3.10, and
 upstream's numpy<2 has none for 3.13); Linux with glibc 2.28 or newer; macOS 14 or newer on Apple Silicon.
@@ -145,12 +149,23 @@ VOICE_REPO, VOICE_ID = "MekaHime/MekaHime_Amika", "MekaHime_Amika"
 VOICE_REV = "a3934e5a83dcb0192901f69536c66b837414e822"    # 2026-11-03: v1.0, 69 emotion tags, each with its clip
 # Every file of that revision with its size and SHA-256 (250 files): her voice is everything outside live2d/, her
 # Live2D model is live2d/Amika/. Update it together with VOICE_REV (--write-manifest <local copy of the repository>).
+# The paper doll (live2d/Host/, below) has a block of its own there, "paper_doll", pinned at PAPER_DOLL_REV.
 MANIFEST = Path(__file__).resolve().with_name("MekaHime_Amika.manifest.json")
 REPO_ONLY = (".gitattributes",)                           # repository plumbing, not part of her voice
 # OpenAmika's voice adapter: its V1_IDS are every tag it can send to the voice server (checked in check_voice)
 VOICE_ADAPTER = ROOT / "speech" / "voice_adapter.py"
 # Amika's Live2D model is in the same repository (same license) under live2d/Amika; it goes to avatar/models/Amika
 AVATAR_ID, AVATAR_PATH = "Amika", "live2d/Amika"
+# The paper doll that stands in for her helpers (task agents: Hermes Agent, nanoMuse) on the Use page: MekaHime's
+# folded-paper shrine doll, in the same repository (same license) under live2d/Host. It goes to avatar/models/Host; its
+# banks.json says "role": "agent", which keeps it out of her model picker. Its 70 files are pinned by size and SHA-256
+# in the manifest's "paper_doll" block, at a revision of their own:
+PAPER_DOLL_ID, PAPER_DOLL_PATH = "Host", "live2d/Host"
+# PLACEHOLDER, set by the maintainer who uploads live2d/Host/ to MekaHime/MekaHime_Amika: the full 40-character commit
+# of that upload (the pins above need no change; see "A new revision of her Hugging Face repository" in
+# README_IF_YOU_ARE_AI_AGENT.md). While it is empty the doll is never downloaded and its row says so; --from-dir still
+# installs it from a local copy, checked file by file against the pins.
+PAPER_DOLL_REV = ""
 
 ROWS: list[tuple[str, str, str]] = []   # (mark, name, detail) for the final summary
 
@@ -997,18 +1012,35 @@ def ensure_ffmpeg(engine: Path, ver: Verified, keep: bool) -> None:
 # ---- her voice and Live2D model (the Hugging Face repository MekaHime/MekaHime_Amika) ------------------------
 def load_manifest(path: Path) -> dict:
     """The pinned file list of her repository (scripts/MekaHime_Amika.manifest.json):
-    {"repo", "revision", "files": {path in the repository: (size, sha256)}}."""
+    {"repo", "revision", "files": {path in the repository: (size, sha256)}, "paper_doll": {path: (size, sha256)}}.
+    "paper_doll" holds live2d/Host/ (the paper doll), pinned at PAPER_DOLL_REV rather than at "revision"; it is empty
+    in a list that has no such block."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         files = {str(p): (int(e[0]), str(e[1]).lower()) for p, e in data["files"].items()}
         repo, rev = str(data["repo"]), str(data["revision"])
+        doll = {str(p): (int(e[0]), str(e[1]).lower()) for p, e in ((data.get("paper_doll") or {}).get("files") or {}).items()}
     except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
         raise SetupError(f"{path} cannot be read ({type(e).__name__}: {e}); restore it (git checkout -- scripts) and "
                          "run this script again") from e
     if (repo, rev) != (VOICE_REPO, VOICE_REV):
         raise SetupError(f"{path} lists {repo}@{rev[:8]}, but this script pins {VOICE_REPO}@{VOICE_REV[:8]}: the two "
                          "must be updated together")
-    return {"repo": repo, "revision": rev, "files": files}
+    stray = [p for p in doll if not p.startswith(PAPER_DOLL_PATH + "/")]
+    if stray:
+        raise SetupError(f"{path}: the paper_doll block lists {stray[0]}, which is not under {PAPER_DOLL_PATH}/; restore "
+                         "it (git checkout -- scripts) and run this script again")
+    return {"repo": repo, "revision": rev, "files": files, "paper_doll": doll}
+
+
+def model_files(files: dict, path: str) -> dict:
+    """One Live2D model folder of the repository (`path`, e.g. live2d/Amika) from a file list {path: (size, sha256)},
+    keyed by the path inside that folder, in install order: its .model3.json last (the file that makes the folder count
+    as a model on the Use page), so an interrupted download never looks complete, and the paper doll's banks.json
+    ("role": "agent") is in place before it."""
+    prefix = path + "/"
+    found = {p[len(prefix):]: e for p, e in files.items() if p.startswith(prefix)}
+    return dict(sorted(found.items(), key=lambda kv: (kv[0].endswith(".model3.json"), kv[0])))
 
 
 def split_assets(files: dict) -> tuple[dict, dict]:
@@ -1016,12 +1048,10 @@ def split_assets(files: dict) -> tuple[dict, dict]:
     outside live2d/ except the repository's own .gitattributes, keyed by its path under Speakers/<voice id>/; the model
     is live2d/Amika/, keyed by its path under avatar/models/Amika/. Each comes in install order: the file that makes
     the folder count as installed (character.json, the .model3.json) is last, so an interrupted download never looks
-    complete to the voice server or the Use page."""
-    prefix = AVATAR_PATH + "/"
+    complete to the voice server or the Use page. (The paper doll, live2d/Host/, is paper_doll_files'.)"""
     voice = {p: e for p, e in files.items() if not p.startswith("live2d/") and p not in REPO_ONLY}
-    avatar = {p[len(prefix):]: e for p, e in files.items() if p.startswith(prefix)}
     return (dict(sorted(voice.items(), key=lambda kv: (kv[0] == "character.json", kv[0]))),
-            dict(sorted(avatar.items(), key=lambda kv: (kv[0].endswith(".model3.json"), kv[0]))))
+            model_files(files, AVATAR_PATH))
 
 
 def hf_token(explicit: Optional[str]) -> tuple[Optional[str], str]:
@@ -1072,6 +1102,17 @@ def asset_files(args: argparse.Namespace, manifest: Optional[dict]) -> tuple[dic
     return split_assets(manifest["files"])
 
 
+def paper_doll_files(args: argparse.Namespace, manifest: Optional[dict]) -> tuple[dict, Optional[str]]:
+    """(the paper doll's files, keyed by their path under avatar/models/Host, the revision they come from). At the
+    pinned revision: the manifest's "paper_doll" pins at PAPER_DOLL_REV, which is None while that placeholder is empty
+    (nothing may be downloaded then). With another --voice-revision: the listing of that revision (not pinned)."""
+    if args.revision != VOICE_REV:
+        return model_files(revision_files(args), PAPER_DOLL_PATH), args.revision
+    if manifest is None:
+        raise SetupError("the pinned file list (scripts/MekaHime_Amika.manifest.json) could not be read; see its row")
+    return model_files(manifest.get("paper_doll") or {}, PAPER_DOLL_PATH), (PAPER_DOLL_REV.strip() or None)
+
+
 def copy_pinned(src: Path, dest: Path, size: Optional[int], sha: Optional[str], ver: Verified) -> None:
     """Copy one file of a local folder (--from-dir) into place through a .part file, checked like a download."""
     if not src.is_file():
@@ -1098,15 +1139,16 @@ def copy_pinned(src: Path, dest: Path, size: Optional[int], sha: Optional[str], 
 
 
 def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str], str], args: argparse.Namespace,
-                  ver: Verified, keep: tuple[str, ...] = ()) -> dict:
+                  ver: Verified, keep: tuple[str, ...] = (), revision: Optional[str] = None) -> dict:
     """Bring every file of `files` ({path under dest: (size, sha256), or (None, None) when not pinned}) into dest. A
     file already there with its pinned size and SHA-256 stays; any other one comes from Hugging Face (or HF_ENDPOINT)
-    at args.revision, or from the --from-dir folder, and is checked before it takes its place (through a .part file,
-    so an interrupted download resumes). A file named in `keep` (her banks.json, which the Setup page edits) stays as
-    it is once it was edited after the install; while it is still the copy this script installed, a newer pin
-    replaces it. With --verify nothing is fetched: what is missing or different is only listed.
+    at `revision` (default args.revision), or from the --from-dir folder, and is checked before it takes its place
+    (through a .part file, so an interrupted download resumes). A file named in `keep` (her banks.json, which the Setup
+    page edits) stays as it is once it was edited after the install; while it is still the copy this script installed,
+    a newer pin replaces it. With --verify nothing is fetched: what is missing or different is only listed.
     Returns {"present", "fetched", "kept": counts, "bad": [paths]}."""
     force = args.update_voice if what == "her voice" else args.update_avatar
+    rev = revision or args.revision
     stats: dict[str, Any] = {"present": 0, "fetched": 0, "kept": 0, "bad": []}
     total = sum(size or 0 for size, _ in files.values())
     done, t_last = 0, time.time()
@@ -1125,12 +1167,12 @@ def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str],
                 copy_pinned(Path(args.from_dir).expanduser().resolve() / Path(*src_rel.split("/")), target, size, sha,
                             ver)
             else:
-                if not args.announced:
-                    args.announced = True
+                if rev not in args.announced:              # once per revision (the paper doll may have its own)
+                    args.announced.add(rev)
                     where = f" (HF_ENDPOINT {HF})" if HF != HF_SITE else ""
-                    log(f"downloading {what} from {HF_SITE}/{args.repo} at revision {args.revision[:12]}{where}" +
+                    log(f"downloading {what} from {HF_SITE}/{args.repo} at revision {rev[:12]}{where}" +
                         (f"; using your Hugging Face token (from {args.token_source})" if args.token else ""))
-                url = f"{HF}/{args.repo}/resolve/{args.revision}/{urllib.parse.quote(src_rel)}"
+                url = f"{HF}/{args.repo}/resolve/{rev}/{urllib.parse.quote(src_rel)}"
                 fetch(url, target, size, sha, None, auth=args.token)
                 if size is not None and sha:
                     ver.record(target, size, sha)        # fetch() checked it
@@ -1144,9 +1186,9 @@ def install_files(what: str, files: dict, dest: Path, repo_path: Callable[[str],
     return stats
 
 
-def hf_refused(e: HTTPStatusError, args: argparse.Namespace) -> str:
+def hf_refused(e: HTTPStatusError, args: argparse.Namespace, revision: Optional[str] = None) -> str:
     """The summary row for a download Hugging Face refused: what it means and what to do, per status."""
-    repo, page = args.repo, f"{HF_SITE}/{args.repo}"
+    repo, page, rev = args.repo, f"{HF_SITE}/{args.repo}", revision or args.revision
     tok = f"your Hugging Face token (from {args.token_source})"
     set_it = '$env:HF_TOKEN = "hf_..."' if IS_WIN else 'export HF_TOKEN=hf_...'
     if e.code == 401 and not args.token:
@@ -1166,21 +1208,21 @@ def hf_refused(e: HTTPStatusError, args: argparse.Namespace) -> str:
                 f"account that can see it ({set_it}), then run this script again")
     if e.code == 404:
         name = urllib.parse.unquote(e.url.rsplit("/", 1)[-1])
-        return (f"Hugging Face has no {name} at revision {args.revision[:8]} of {repo} (HTTP 404"
+        return (f"Hugging Face has no {name} at revision {rev[:8]} of {repo} (HTTP 404"
                 f"{', ' + e.error_code if e.error_code else ''}): update OpenAmika (git pull) and run this script again")
     return f"Hugging Face refused {urllib.parse.unquote(e.url)} (HTTP {e.code}); run this script again later"
 
 
 def fetch_assets(what: str, files: dict, dest: Path, repo_path: Callable[[str], str], args: argparse.Namespace,
-                 ver: Verified, keep: tuple[str, ...] = ()) -> dict:
+                 ver: Verified, keep: tuple[str, ...] = (), revision: Optional[str] = None) -> dict:
     """install_files with its failures worded for the summary row. A refusal or a network failure is also said at
     once: the voice server install that follows takes minutes before the summary repeats it."""
     try:
-        return install_files(what, files, dest, repo_path, args, ver, keep)
+        return install_files(what, files, dest, repo_path, args, ver, keep, revision)
     except HTTPStatusError as e:
         if args.from_dir:
             raise
-        msg = hf_refused(e, args)
+        msg = hf_refused(e, args, revision)
         log(f"!! {what}: {msg}")
         raise SetupError(msg) from e
     except IntegrityError as e:
@@ -1275,19 +1317,36 @@ def check_avatar(d: Path) -> tuple[bool, str]:
                   f"{len(list(d.glob('*.exp3.json')))} expressions")
 
 
+def check_paper_doll(d: Path) -> tuple[bool, str]:
+    """check_avatar, plus the "role": "agent" in its banks.json: without it the doll would count as a second model of
+    hers (offered in her model picker) instead of standing in for her helpers."""
+    good, why = check_avatar(d)
+    if not good:
+        return good, why
+    try:
+        role = (json.loads((d / "banks.json").read_text(encoding="utf-8-sig")).get("config") or {}).get("role")
+    except (OSError, ValueError, AttributeError):
+        role = None
+    if role != "agent":
+        return False, (f"{why}; but its banks.json does not say \"role\": \"agent\", so the Use page would offer it as "
+                       "a model of hers: delete that banks.json and run this script again to get the pinned one back")
+    return True, why
+
+
 LICENSE_URL = f"{HF_SITE}/{VOICE_REPO}/blob/main/LICENSE"
 
 
 def ask_voice_license() -> bool:
-    """Show the license of her voice and Live2D model in short on an interactive console and ask once."""
-    print(f"\n[voice] Amika's voice and her Live2D model ({HF_SITE}/{VOICE_REPO}) are free under MekaHime's personal-use license:\n"
+    """Show the license of her voice, her Live2D model and the paper doll in short on an interactive console and ask
+    once."""
+    print(f"\n[voice] Amika's voice, her Live2D model and the paper doll that stands in for her helpers ({HF_SITE}/{VOICE_REPO}) are free under MekaHime's personal-use license:\n"
           "          - personal, non-commercial use only, and you must be 18 or older\n"
-          "          - no redistribution, re-hosting or resale of her voice, her Live2D model or their files\n"
+          "          - no redistribution, re-hosting or resale of her voice, her Live2D model, the paper doll or their files\n"
           "          - no training, fine-tuning or distilling other models on them\n"
           "          - credit MekaHime visibly when you post videos or streams with her\n"
           f"          full text: {LICENSE_URL}\n", flush=True)
     try:
-        answer = input("[voice] type yes to accept and download her voice and Live2D model (anything else skips them for now): ")
+        answer = input("[voice] type yes to accept and download her voice, her Live2D model and the paper doll (anything else skips them for now): ")
     except (EOFError, KeyboardInterrupt):
         print(flush=True)
         return False
@@ -1297,21 +1356,22 @@ def ask_voice_license() -> bool:
 def not_accepted(args: argparse.Namespace) -> str:
     how = ("Run this script again in a console and type yes when it asks" if not args.console else
            "Run this script again and type yes when it asks")
-    return (f"not downloaded: her license was not accepted (one license covers her voice and her Live2D model). {how}, "
-            f"or pass --accept-voice-license once you have read it ({LICENSE_URL})")
+    return (f"not downloaded: her license was not accepted (one license covers her voice, her Live2D model and the "
+            f"paper doll). {how}, or pass --accept-voice-license once you have read it ({LICENSE_URL})")
 
 
-def files_note(stats: dict, files: dict, args: argparse.Namespace) -> str:
-    """What happened to the files, for the summary row."""
+def files_note(stats: dict, files: dict, args: argparse.Namespace, revision: Optional[str] = None) -> str:
+    """What happened to the files, for the summary row (revision: where they came from, default args.revision)."""
+    rev = revision or args.revision
     pinned = all(sha for _, sha in files.values())
-    origin = (f"from {args.from_dir}" if args.from_dir else f"from {args.repo}@{args.revision[:8]}")
-    checked = (f"{len(files)} files verified" if pinned else f"{len(files)} files of revision {args.revision[:8]}, "
+    origin = (f"from {args.from_dir}" if args.from_dir else f"from {args.repo}@{rev[:8]}")
+    checked = (f"{len(files)} files verified" if pinned else f"{len(files)} files of revision {rev[:8]}, "
                "not pinned: not hash-checked")
     if stats["fetched"]:
         verb = "copied" if args.from_dir else "downloaded"
         got = f"{verb} {stats['fetched']} file(s) {origin}"
         return f"{got}; {checked}" + ("; your banks.json kept" if stats["kept"] else "")
-    return f"existing; {checked} against {args.repo}@{args.revision[:8]}" + ("; your banks.json kept" if stats["kept"] else "")
+    return f"existing; {checked} against {args.repo}@{rev[:8]}" + ("; your banks.json kept" if stats["kept"] else "")
 
 
 def verify_failed(dest: Path, bad: list[str], files: dict) -> str:
@@ -1382,24 +1442,95 @@ def ensure_avatar(engine: Path, args: argparse.Namespace, ver: Verified, manifes
     row("OK " if good else "!! ", name, f"{dest} ({files_note(stats, files, args)}; {why})")
 
 
+DOLL_ROLE = "stands in for her helpers on the Use page while a task agent is on"
+
+
+def ensure_paper_doll(engine: Path, args: argparse.Namespace, ver: Verified, manifest: Optional[dict]) -> None:
+    """The paper doll (live2d/Host in the same repository, same license) into avatar/models/Host. The Use page seats
+    it beside her whenever a task agent (Hermes Agent, nanoMuse) is switched on on the Tools page, and its speech
+    bubbles carry the helper's side of the exchange. Checked file by file like her model; an edited banks.json is
+    kept. Its files are pinned at PAPER_DOLL_REV: while that placeholder is empty nothing is downloaded (a doll already
+    in place, or one from --from-dir, is still checked against the pins)."""
+    dest = Path(args.paper_doll_dir).expanduser().resolve()
+    name = f"paper doll {PAPER_DOLL_ID}"
+    installed = dest.is_dir() and any(dest.glob("*.model3.json"))
+    if args.skip_paper_doll:
+        good, why = check_paper_doll(dest)
+        row("OK " if good else "-- ", name, f"{dest} ({why}; not checked: --skip-paper-doll)" if good else
+            "skipped (--skip-paper-doll): her helpers (Hermes Agent, nanoMuse) have no stand-in on her stage and no "
+            "speech bubbles until a model whose banks.json says \"role\": \"agent\" is in avatar/models/")
+        return
+    files, revision = paper_doll_files(args, manifest)
+    if not files:
+        row("-- ", name, (f"{args.repo}@{args.revision[:8]} has no {PAPER_DOLL_PATH}/" if args.revision != VOICE_REV else
+                          f"the pinned file list has no {PAPER_DOLL_PATH}/ (update OpenAmika: git pull)") +
+            ": her helpers have no stand-in on her stage")
+        return
+    pending = revision is None and not args.from_dir     # PAPER_DOLL_REV not set yet: it cannot be downloaded
+    unpinned = (f"this OpenAmika does not pin the revision of {args.repo} that adds {PAPER_DOLL_PATH}/ yet "
+                "(PAPER_DOLL_REV in scripts/setup_tts.py is empty). Her helpers work without it; they only have no "
+                "stand-in on her stage. Update OpenAmika (git pull) and run this script again later")
+    if pending and not installed:
+        row("-- ", name, f"not downloaded: {unpinned}")
+        return
+    if not (installed or args.accept_voice_license or args.verify or pending):
+        row("!! ", name, not_accepted(args))
+        return
+    probe = argparse.Namespace(**{**vars(args), "verify": True}) if pending else args     # pending: check, never fetch
+    stats = fetch_assets("the paper doll", files, dest, lambda p: f"{PAPER_DOLL_PATH}/{p}", probe, ver,
+                         keep=("banks.json",), revision=revision)
+    good, why = check_paper_doll(dest)
+    if stats["bad"]:
+        if pending:
+            row("-- ", name, f"{dest}: {len(stats['bad'])} of {len(files)} files missing or not the pinned ones "
+                             f"({', '.join(stats['bad'][:4])}{' ...' if len(stats['bad']) > 4 else ''}); they cannot be "
+                             f"repaired from Hugging Face: {unpinned}")
+        else:
+            row("!! ", name, verify_failed(dest, stats["bad"], files))
+        return
+    note = (files_note(stats, files, args, revision) if revision or stats["fetched"] else
+            f"existing; {len(files)} files verified against the pinned list" +
+            ("; your banks.json kept" if stats["kept"] else ""))
+    row("OK " if good else "!! ", name, f"{dest} ({note}; {why}; {DOLL_ROLE})")
+
+
 def write_manifest_from(folder: Path, out: Path, revision: str) -> int:
     """--write-manifest: the pinned file list of a local copy of her repository at `revision` (maintainers, after
-    publishing a new revision): every file's size and SHA-256, written to `out`."""
+    publishing a new revision): every file's size and SHA-256, written to `out`. The paper doll (live2d/Host/) goes
+    into the "paper_doll" block; a copy without it keeps the block that is there (the doll stays at PAPER_DOLL_REV)."""
     folder = folder.expanduser().resolve()
     files = {p.relative_to(folder).as_posix(): p for p in sorted(folder.rglob("*"))
              if p.is_file() and not any(part.startswith(".") and part != ".gitattributes"
                                         for part in p.relative_to(folder).parts)}
     if "character.json" not in files or not any(f.startswith(AVATAR_PATH + "/") for f in files):
         raise SetupError(f"{folder} does not look like her repository (character.json and {AVATAR_PATH}/ expected)")
-    lines = [f'    {json.dumps(rel, ensure_ascii=False)}: [{p.stat().st_size}, "{sha256_file(p)}"]'
-             for rel, p in sorted(files.items())]
+    doll_prefix = PAPER_DOLL_PATH + "/"
+
+    def entry(rel: str, size: int, sha: str) -> str:
+        return f'{json.dumps(rel, ensure_ascii=False)}: [{size}, "{sha}"]'
+
+    lines = ["    " + entry(rel, p.stat().st_size, sha256_file(p))
+             for rel, p in sorted(files.items()) if not rel.startswith(doll_prefix)]
     old = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else {}
+    old_doll = old.get("paper_doll") if isinstance(old.get("paper_doll"), dict) else {}
+    doll = {rel: (p.stat().st_size, sha256_file(p)) for rel, p in files.items() if rel.startswith(doll_prefix)}
+    kept = not doll
+    if kept:
+        doll = {str(rel): (int(e[0]), str(e[1])) for rel, e in (old_doll.get("files") or {}).items()}
+    doll_lines = ["      " + entry(rel, size, sha) for rel, (size, sha) in sorted(doll.items())]
     text = ("{\n" + f'  "_readme": {json.dumps(old.get("_readme", ""), ensure_ascii=False)},\n'
             f'  "repo": {json.dumps(VOICE_REPO)},\n  "revision": {json.dumps(revision)},\n  "files": {{\n'
-            + ",\n".join(lines) + "\n  }\n}\n")
+            + ",\n".join(lines) + "\n  },\n"
+            f'  "paper_doll": {{\n    "_readme": {json.dumps(old_doll.get("_readme", ""), ensure_ascii=False)},\n'
+            + ('    "files": {\n' + ",\n".join(doll_lines) + "\n    }\n" if doll_lines else '    "files": {}\n')
+            + "  }\n}\n")
     out.write_text(text, encoding="utf-8", newline="\n")
-    print(f"{out}: {len(files)} files of {VOICE_REPO}@{revision[:8]}. Set VOICE_REV in {Path(__file__).name} to "
-          f"{revision} as well.")
+    me = Path(__file__).name
+    print(f"{out}: {len(lines)} files of {VOICE_REPO}@{revision[:8]}. Set VOICE_REV in {me} to {revision} as well.")
+    if not kept:
+        print(f"  and the paper doll's {len(doll)} files ({PAPER_DOLL_PATH}/): set PAPER_DOLL_REV in {me} to {revision} too.")
+    elif doll:
+        print(f"  The paper doll's {len(doll)} pins were kept: this copy has no {PAPER_DOLL_PATH}/ (PAPER_DOLL_REV stays).")
     return 0
 
 
@@ -1603,6 +1734,8 @@ def write_install_json(engine: Path, vpy: Path, device: str, probe: dict, args: 
         "nltk_data": NLTK_COMMIT,
         "voice": {"repo": VOICE_REPO, "id": VOICE_ID, "revision": args.revision},
         "avatar": {"repo": VOICE_REPO, "path": AVATAR_PATH, "id": AVATAR_ID, "revision": args.revision},
+        "paper_doll": {"repo": VOICE_REPO, "path": PAPER_DOLL_PATH, "id": PAPER_DOLL_ID,
+                       "revision": (args.revision if args.revision != VOICE_REV else PAPER_DOLL_REV.strip()) or None},
         "license": ({"accepted": args.license_how, "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "terms": LICENSE_URL}
                     if args.license_how else before.get("license")),
     }
@@ -1662,6 +1795,11 @@ class Steps:
         return None
 
 
+def and_list(items: list[str]) -> str:
+    """"a", "a and b", "a, b and c" (non-empty)."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def optional_ffmpeg(engine: Path, ver: Verified, keep: bool) -> None:
     try:
         ensure_ffmpeg(engine, ver, keep)
@@ -1670,8 +1808,9 @@ def optional_ffmpeg(engine: Path, ver: Verified, keep: bool) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Install Amika's voice and Live2D model (from Hugging Face) and the OpenAmika "
-                                             "voice server (a MekaHime build of GPT-SoVITS)")
+    ap = argparse.ArgumentParser(description="Install Amika's voice, her Live2D model and the paper doll that stands in for "
+                                             "her helpers (from Hugging Face) and the OpenAmika voice server (a MekaHime "
+                                             "build of GPT-SoVITS)")
     ap.add_argument("--engine-dir", type=Path, default=SOURCE_ENGINE, help="default: vendor/tts-engine")
     ap.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto",
                     help="torch build: auto = CUDA 12.8 when an NVIDIA GPU is visible (Windows/Linux), else CPU")
@@ -1679,16 +1818,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--python", default=None, help="Python 3.11 (or 3.12) interpreter for the venv (default: the first "
                                                      "3.11 found: this one, py -3.11, python3.11; then 3.12)")
     ap.add_argument("--accept-voice-license", action="store_true",
-                    help="accept the license of Amika's voice and Live2D model (personal use, 18+) without being "
-                         "asked")
+                    help="accept the license of Amika's voice, her Live2D model and the paper doll (personal use, 18+) "
+                         "without being asked")
     ap.add_argument("--verify", action="store_true",
-                    help="check her voice and Live2D model file by file (size + SHA-256) and the voice server's files; "
-                         "download and install nothing")
+                    help="check her voice, her Live2D model and the paper doll file by file (size + SHA-256) and the "
+                         "voice server's files; download and install nothing")
     ap.add_argument("--assets-only", action="store_true",
-                    help="only her voice and Live2D model: skip the voice server install (torch, GPT-SoVITS, models)")
+                    help="only her voice, her Live2D model and the paper doll: skip the voice server install (torch, "
+                         "GPT-SoVITS, models)")
     ap.add_argument("--from-dir", default=None,
-                    help="take her voice and Live2D model from a local folder laid out like the Hugging Face repository "
-                         "(offline installs); every file is still checked against the pinned list")
+                    help="take her voice, her Live2D model and the paper doll from a local folder laid out like the "
+                         "Hugging Face repository (offline installs); every file is still checked against the pinned list")
     ap.add_argument("--skip-voice", action="store_true", help="do not install Amika's voice")
     ap.add_argument("--voice-from", default=None,
                     help="copy a voice folder you already have (character.json, weights, references/) instead")
@@ -1698,9 +1838,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                          "by SHA-256; other revisions are not)")
     ap.add_argument("--skip-avatar", action="store_true", help="do not install Amika's Live2D model")
     ap.add_argument("--update-avatar", action="store_true",
-                    help="download her Live2D model again (a banks.json edited in Setup is kept)")
+                    help="download her Live2D model and the paper doll again (a banks.json you edited is kept)")
     ap.add_argument("--avatar-dir", default=str(ROOT / "avatar" / "models" / "Amika"),
                     help="where her Live2D model goes (default: avatar/models/Amika)")
+    ap.add_argument("--skip-paper-doll", action="store_true",
+                    help="do not install the paper doll that stands in for her helpers (Hermes Agent, nanoMuse)")
+    ap.add_argument("--paper-doll-dir", default=str(ROOT / "avatar" / "models" / PAPER_DOLL_ID),
+                    help=f"where the paper doll goes (default: avatar/models/{PAPER_DOLL_ID})")
     ap.add_argument("--hf-token", default=None,
                     help="Hugging Face token; prefer the HF_TOKEN environment variable or `hf auth login` (a command "
                          "line is visible to other programs). Needed only while her repository is private")
@@ -1725,7 +1869,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ROWS.clear()
     args.repo, args.revision = VOICE_REPO, args.voice_revision
     args.console = sys.stdin.isatty()
-    args.announced = False
+    args.announced = set()          # revisions whose first download was announced
     args.license_how = ""
 
     engine = args.engine_dir.expanduser().resolve()
@@ -1733,16 +1877,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     log(f"OpenAmika voice setup -> {engine}{mode}  ({platform.system()} {platform.machine()}, Python {platform.python_version()})")
     free = disk_free_gb(engine)
     if not args.verify and free is not None and free < (2 if args.assets_only else 12):
-        log(f"WARNING: only {free:.0f} GB free; " + ("her voice and Live2D model need about 0.5 GB" if args.assets_only
-                                                  else "a full install needs about 9 GB"))
+        log(f"WARNING: only {free:.0f} GB free; " + ("her voice, her Live2D model and the paper doll need about 0.5 GB"
+                                                  if args.assets_only else "a full install needs about 9 GB"))
     warning = "" if args.verify else long_folder_warning(ROOT if engine.is_relative_to(ROOT) else engine)
     if warning:
         log(warning)
     voice_dir = engine / "Speakers" / VOICE_ID
     avatar_dir = Path(args.avatar_dir).expanduser()
+    doll_dir = Path(args.paper_doll_dir).expanduser()
     voice_missing = args.update_voice or not (voice_dir / "character.json").is_file()
     avatar_missing = args.update_avatar or not any(avatar_dir.glob("*.model3.json"))
-    wanted = ((voice_missing and not (args.skip_voice or args.voice_from)) or (avatar_missing and not args.skip_avatar))
+    # the paper doll counts only when it can come in this run (its revision is pinned, or a local copy, or another
+    # revision asked for): an install that pulls a newer OpenAmika is then asked again, since the license covers it too
+    doll_reachable = bool(PAPER_DOLL_REV.strip()) or bool(args.from_dir) or args.voice_revision != VOICE_REV
+    doll_missing = args.update_avatar or not any(doll_dir.glob("*.model3.json"))
+    wanted = ((voice_missing and not (args.skip_voice or args.voice_from)) or (avatar_missing and not args.skip_avatar)
+              or (doll_missing and doll_reachable and not args.skip_paper_doll))
     if wanted and not args.verify:
         if args.accept_voice_license:
             args.license_how = "--accept-voice-license"
@@ -1762,11 +1912,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             steps.run("engine files", sync_engine_files, engine)
         ver = Verified(engine / ".openamika-verified.json")
         manifest = None
-        if args.revision == VOICE_REV and not (args.skip_voice and args.skip_avatar):
+        if args.revision == VOICE_REV and not (args.skip_voice and args.skip_avatar and args.skip_paper_doll):
             manifest = steps.run("pinned file list", load_manifest, args.manifest)
-        # her voice and Live2D model first: only the standard library, so they never wait for (or fail with) torch
+        # her voice, her Live2D model and the paper doll first: only the standard library, so they never wait for (or
+        # fail with) torch
         steps.run(f"voice {VOICE_ID}", ensure_voice, engine, args, ver, manifest)
         steps.run(f"Live2D model {AVATAR_ID}", ensure_avatar, engine, args, ver, manifest)
+        steps.run(f"paper doll {PAPER_DOLL_ID}", ensure_paper_doll, engine, args, ver, manifest)
         if args.assets_only:
             pass
         elif args.verify:
@@ -1809,6 +1961,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     for mark, name, detail in ROWS:
         print(f"  {mark}{name.ljust(width)}  {detail}")
     bad = rc != 0 or any(m.strip() == "!!" for m, _, _ in ROWS)
+    parts = [label for key, label in ((f"voice {VOICE_ID}", "her voice"), (f"Live2D model {AVATAR_ID}", "her Live2D model"),
+                                      (f"paper doll {PAPER_DOLL_ID}", "the paper doll"))
+             if any(m.strip() == "OK" and n == key for m, n, _ in ROWS)]
     print("=" * 78)
     brain = Path("envs/brain/Scripts/python.exe" if IS_WIN else "envs/brain/bin/python")
     check = f"{brain if (ROOT / brain).is_file() else '<brain python>'} launch.py --check"
@@ -1816,9 +1971,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("Fix the !! lines above and run this script again (finished steps are skipped)." if not args.verify else
               "Fix the !! lines above: run this script without --verify (finished files are kept).")
     elif args.verify:
-        print("Verified: her voice and Live2D model" + ("" if args.assets_only else " and the voice server") + " are complete.")
+        checked = parts + ([] if args.assets_only else ["the voice server"])
+        print(f"Verified: {and_list(checked)} {'is' if len(checked) == 1 else 'are'} complete." if checked else
+              "Verified: nothing to check (everything was skipped).")
     elif args.assets_only:
-        print("Done: her voice and Live2D model are in place.")
+        print(f"Done: {and_list(parts)} {'is' if len(parts) == 1 else 'are'} in place." if parts else "Done.")
     elif IS_WIN:
         print("Done. Next:  .\\Start_OpenAmika.bat   (or double-click it: her voice server starts with the rest; the page "
               "opens at http://localhost:53000)")
