@@ -54,13 +54,13 @@ cd C:\
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # 她的大脑、耳朵、记忆和眼睛
-envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 她的声音和 Live2D 模型：输入 yes
+envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 她的声音、Live2D 模型和纸娃娃：输入 yes
 .\Start_OpenAmika.bat                                                # 启动她
 ```
 
-她的声音和 Live2D 模型依照 MekaHime 的个人使用许可证免费提供（见[许可证](#许可证)）；`setup_tts.py` 这一行会先显示许可证内容，只有在你输入 `yes` 之后才会下载她的文件。
+她的声音、Live2D 模型和纸娃娃依照 MekaHime 的个人使用许可证免费提供（见[许可证](#许可证)）；`setup_tts.py` 这一行会先显示许可证内容，只有在你输入 `yes` 之后才会下载她的文件。
 
-两条安装命令最后都会输出一份汇总：每个部分一行，完成显示 `OK`，有问题显示 `!!` 并附上解决方法，`--` 只是提示信息（例如还没有 OpenRouter 密钥：第一次打开页面时会请你填写）。再次运行同一条命令会从中断处继续，已完成的部分会跳过。`setup_tts.py` 的汇总里出现 `OK voice MekaHime_Amika` 和 `OK Live2D model Amika`，就说明她的声音和身体都已就位。
+两条安装命令最后都会输出一份汇总：每个部分一行，完成显示 `OK`，有问题显示 `!!` 并附上解决方法，`--` 只是提示信息（例如还没有 OpenRouter 密钥：第一次打开页面时会请你填写）。再次运行同一条命令会从中断处继续，已完成的部分会跳过。`setup_tts.py` 的汇总里出现 `OK voice MekaHime_Amika` 和 `OK Live2D model Amika`，就说明她的声音和身体都已就位；`OK paper doll Host` 是替她的帮手站在舞台上的纸娃娃（见[她的帮手](#她的帮手hermes-和-nanomuse)）。
 
 ## 和她聊天
 
@@ -88,21 +88,46 @@ envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 她的声
 | 她的声音断断续续或非常慢 | 关闭其他占用显卡的程序，或者在 `settings.json` 里设置 `"vision": {"enabled": false}` 关掉她的眼睛。 |
 | 用 Ollama 时她不像她自己、记不住事，或者回复格式乱了 | 模型太小了。请换用 27B 及以上的模型（想要完整、稳定的体验用 70B 及以上），或者切回 OpenRouter：Setup → Brain → OpenRouter → “Switch back to the OpenRouter preset”。 |
 | 用 Ollama 时她回复得非常慢 | 如果 `ollama ps` 显示的是 CPU/GPU 比例而不是 `100% GPU`，说明模型和她一起放不进显存。如果显示 `100% GPU`，那么在你打断她之后，或者在她保存记忆、回想对话的时候，回复变慢是本地模型的正常现象。见[用哪种语言模型？](#用哪种语言模型)。 |
+| Tools 页面上帮手的卡片是红色的，或者她说联系不上 Hermes 或 nanoMuse | 运行 `envs\brain\Scripts\python.exe launch.py --check`，看 `agent` 和 `hermes key` 那几行；每条信息的含义和解决方法见 [docs/TOOLS.md](docs/TOOLS.md#when-it-does-not-work)。 |
 
 每个组件的日志都在 `logs\` 里。其他问题可以到 [Discord](https://discord.gg/mekahime) 提问，或提交 [issue](https://github.com/zeekk0/OpenAmika/issues)。如果你在用 AI 编程助手，请让它阅读 [README_IF_YOU_ARE_AI_AGENT.md](README_IF_YOU_ARE_AI_AGENT.md)。
 
 ## 可选功能
 
 - **完全本地运行**：安装 [Ollama](https://ollama.com)，运行 `ollama pull gemma3:27b`（17 GB；也可以用其他 27B 及以上的模型，见[用哪种语言模型？](#用哪种语言模型)），然后在 Setup 页面选择 Brain → Ollama → Detect models → Use this model。不需要密钥。如果 Ollama 运行在另一台电脑上，请在按 Detect models 之前先填写它的地址。
-- **工具**：她可以替你使用的 MCP 服务器和任务代理，在 Tools 页面设置（[docs/TOOLS.md](docs/TOOLS.md)）。
+- **她的帮手**：Hermes Agent 或 nanoMuse 替她跑腿，纸娃娃在舞台上站在她身边（[见下文](#她的帮手hermes-和-nanomuse)）。其他 MCP 服务器也可以在 Tools 页面使用（[docs/TOOLS.md](docs/TOOLS.md)）。
 - **智能家居**：她可以开关的 Zigbee 插座（[IoT/README.md](IoT/README.md)）。在你于 Tools 页面阅读并接受 IoT 安全声明（[docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)）之前，它始终关闭。她运行在大语言模型之上，可能出错：绝对不要连接取暖器、门锁、阀门或任何可能造成危险的设备。
 - **用文字找她**：通过 Discord 或 Telegram（[docs/MESSENGERS.md](docs/MESSENGERS.md)）。
 - **用手机访问**：`Tailscale_Serve_OpenAmika.bat` 可以让你通过 [Tailscale](https://tailscale.com) 在自己的设备上访问她。
 
+## 她的帮手：Hermes 和 nanoMuse
+
+她可以把跑腿的事交给你电脑上的帮手程序——[Hermes Agent](https://hermes-agent.nousresearch.com) 或 [nanoMuse](https://github.com/nano-muse/nanoMuse)：它们会上网搜索、操作浏览器、处理文件。帮不帮由她决定：她先回答你，再把事情交给帮手，替它转达问题，最后用自己的话把结果告诉你。帮手开着的时候，MekaHime 的纸娃娃会站在她舞台的右下角，演帮手那一方。每个帮手都在 OpenRouter 上用自己的模型；她现在用的密钥就可以。
+
+**Hermes Agent**（在一个新的 PowerShell 窗口里）：
+
+```powershell
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # 安装 Hermes；装好后打开一个新窗口
+hermes model                                                  # 选 OpenRouter，粘贴你的密钥，选 z-ai/glm-5
+$key = [guid]::NewGuid().ToString('N')                        # 给它的 API 服务器生成一个随机密钥
+hermes config set API_SERVER_ENABLED true
+hermes config set API_SERVER_KEY $key
+$key | Set-Clipboard                                          # 已复制，下一步要用
+```
+
+**nanoMuse**：把它克隆到 `Nanomuse` 文件夹，给它写一个 `config.toml`，再把密钥存进它自己的保险库（vault）；命令和文件内容见 [docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse)。
+
+**连接。** 在 OpenAmika 文件夹里运行 `Copy-Item config\tools.example.json config\tools.json`（只在还没有 `config\tools.json` 时）和 `notepad config\tools.json`。把最上面和帮手那一项的 `"enabled"` 改成 `true`；如果是 Hermes，再把密钥粘贴（Ctrl+V）到 `"HERMES_API_KEY"`。保存后启动她（`.\Start_OpenAmika.bat`），她会自己启动帮手。Tools 页面上这个帮手的卡片会变成绿色（`agent online`）。
+
+**见见纸娃娃。** 打开 Use 页面，纸娃娃会滑进她的舞台。试着问她，比如“能让 Hermes 查一下明天的天气吗？”。她先回答你，在气泡里打出要交代的事，接下来就轮到纸娃娃了：帮手干活时它在思考，帮手的每一步它都用自己的气泡说出来；帮手有问题要问或需要你同意时，它会露出吃惊的样子（直接说“好”或“不行”，或在 Use 页面点 Approve）；结果到了它会很开心，然后她把结果告诉你。纸娃娃由 `setup_tts.py` 一起安装（汇总里显示 `OK paper doll Host`）。
+
+每一步的详细说明，以及每条信息的含义：[docs/TOOLS.md](docs/TOOLS.md#her-helpers-set-up-hermes-agent-and-nanomuse)
+
 ## 许可证
 
 - OpenAmika 的代码采用 **MIT** 许可证（[LICENSE](LICENSE)）。第三方部分遵循各自的许可证（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）；`ui/vendor/` 中的 Live2D Cubism Core 不是 MIT。
-- **Amika 本身不是 MIT。** 她的角色、美术、声音、Live2D 模型及其权重（[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)）归 MekaHime Inc. 所有，依照个人使用许可证免费提供：仅限个人、非商业用途，须年满 18 岁，不得再分发或重新托管，不得用于训练其他模型；发布有她出镜的视频或直播时，须清晰可见地注明 MekaHime。
+- **Amika 本身不是 MIT。** 她的角色、美术、声音、Live2D 模型及其权重，以及替她的帮手站台的纸娃娃（[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)）归 MekaHime Inc. 所有，依照个人使用许可证免费提供：仅限个人、非商业用途，须年满 18 岁，不得再分发或重新托管，不得用于训练其他模型；发布有她出镜的视频或直播时，须清晰可见地注明 MekaHime。
+- Hermes Agent（MIT）和 nanoMuse（GPL-3.0-or-later）是你自己安装的独立程序；OpenAmika 只与它们通信。
 - 本项目构建于 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice)、[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)、[bge-m3](https://huggingface.co/BAAI/bge-m3)、[Qwen3-VL](https://github.com/QwenLM/Qwen3-VL)、[pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) 与 [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/)、[OpenRouter](https://openrouter.ai)、[Ollama](https://ollama.com) 和 [Model Context Protocol](https://modelcontextprotocol.io) 之上。谢谢你们。
 
 ## 支持

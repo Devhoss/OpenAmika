@@ -54,13 +54,13 @@ cd C:\
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # 脳・耳・記憶・目
-envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 声とLive2Dモデル：yes と入力
+envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 声、Live2Dモデル、紙人形：yes と入力
 .\Start_OpenAmika.bat                                                # 起動
 ```
 
-彼女の声とLive2Dモデルは、MekaHimeの個人利用ライセンス（[ライセンス](#ライセンス)参照）のもとで無料です。`setup_tts.py`の行が最初にその内容を表示し、`yes`と入力したときだけ彼女のファイルをダウンロードします。
+彼女の声とLive2Dモデル、そして紙人形は、MekaHimeの個人利用ライセンス（[ライセンス](#ライセンス)参照）のもとで無料です。`setup_tts.py`の行が最初にその内容を表示し、`yes`と入力したときだけ彼女のファイルをダウンロードします。
 
-どちらのセットアップコマンドも、最後にまとめを表示します。1行に1項目で、完了なら`OK`、問題があれば`!!`と直し方、`--`はお知らせだけです（たとえばOpenRouterのキーがまだないとき。最初に開いたときに入力できます）。同じコマンドをもう一度実行すれば、終わった部分は飛ばして続きから再開します。`setup_tts.py`のまとめに`OK voice MekaHime_Amika`と`OK Live2D model Amika`が出ていれば、彼女の声と体はそろっています。
+どちらのセットアップコマンドも、最後にまとめを表示します。1行に1項目で、完了なら`OK`、問題があれば`!!`と直し方、`--`はお知らせだけです（たとえばOpenRouterのキーがまだないとき。最初に開いたときに入力できます）。同じコマンドをもう一度実行すれば、終わった部分は飛ばして続きから再開します。`setup_tts.py`のまとめに`OK voice MekaHime_Amika`と`OK Live2D model Amika`が出ていれば、彼女の声と体はそろっています。`OK paper doll Host`は、彼女のヘルパーの代わりに舞台に立つ紙人形です（[彼女のヘルパー](#彼女のヘルパーhermesとnanomuse)）。
 
 ## 話しかける
 
@@ -88,21 +88,46 @@ OpenAmikaフォルダーの`Start_OpenAmika.bat`をダブルクリックしま�
 | 声が途切れる、またはとても遅い | グラフィックカードを使うほかのアプリを閉じるか、`settings.json`で`"vision": {"enabled": false}`にして目の機能をオフにします。 |
 | Ollamaで彼女らしくない、話したことを忘れる、返事が崩れる | モデルが小さすぎます。27B以上（フルで安定した体験には70B以上）のモデルを使うか、OpenRouterに戻してください：Setup → Brain → OpenRouter → 「Switch back to the OpenRouter preset」。 |
 | Ollamaだと返事がとても遅い | `ollama ps`の表示が`100% GPU`ではなくCPU/GPUの割合になっている場合は、モデルが彼女と一緒にビデオメモリに収まっていません。`100% GPU`なら、話をさえぎった直後や、記憶の保存中・会話の振り返り中に返事が遅れるのは、ローカルのモデルでは普通のことです。[どの言語モデルを使う？](#どの言語モデルを使う)を参照してください。 |
+| Toolsページのヘルパーのカードが赤い、または彼女がHermesやnanoMuseにつながらないと言う | `envs\brain\Scripts\python.exe launch.py --check`を実行し、`agent`と`hermes key`の行を見てください。各メッセージの意味と直し方は[docs/TOOLS.md](docs/TOOLS.md#when-it-does-not-work)にあります。 |
 
 各パーツのログは`logs\`にあります。それでも解決しないときは、[Discord](https://discord.gg/mekahime)で質問するか、[issue](https://github.com/zeekk0/OpenAmika/issues)を作成してください。AIコーディングエージェントを使う場合は、[README_IF_YOU_ARE_AI_AGENT.md](README_IF_YOU_ARE_AI_AGENT.md)を読ませてください。
 
 ## オプション機能
 
 - **完全ローカル**：[Ollama](https://ollama.com)をインストールして`ollama pull gemma3:27b`を実行し（17 GB。27B以上のほかのモデルでも構いません。[どの言語モデルを使う？](#どの言語モデルを使う)を参照）、Setupページで Brain → Ollama → Detect models → Use this model を選びます。キーは不要です。別のPCで動くOllamaを使う場合は、Detect modelsの前にそのアドレスを入力してください。
-- **ツール**：彼女があなたのために使えるMCPサーバーやタスクエージェント。Toolsページで設定します（[docs/TOOLS.md](docs/TOOLS.md)）。
+- **彼女のヘルパー**：Hermes AgentやnanoMuseが彼女の用事をこなし、舞台では紙人形が彼女の横に立ちます（[下記](#彼女のヘルパーhermesとnanomuse)）。ほかのMCPサーバーもToolsページで使えます（[docs/TOOLS.md](docs/TOOLS.md)）。
 - **スマートホーム**：彼女が切り替えられるZigbeeプラグ（[IoT/README.md](IoT/README.md)）。ToolsページでIoT安全に関する声明（[docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)）を読んで同意するまでオフのままです。彼女は言語モデルで動いていて間違えることもあるので、暖房器具、錠、バルブなど、危険につながるものは絶対につながないでください。
 - **テキストで話す**：DiscordやTelegramから（[docs/MESSENGERS.md](docs/MESSENGERS.md)）。
 - **スマートフォンから**：`Tailscale_Serve_OpenAmika.bat`を使うと、[Tailscale](https://tailscale.com)経由で自分のデバイスから彼女にアクセスできます。
 
+## 彼女のヘルパー：HermesとnanoMuse
+
+彼女は、あなたのPCで動くヘルパープログラム、[Hermes Agent](https://hermes-agent.nousresearch.com)や[nanoMuse](https://github.com/nano-muse/nanoMuse)に用事を頼めます。ヘルパーはウェブを検索し、ブラウザーを操作し、ファイルを扱います。手伝うかどうかは彼女が決めます。あなたに返事をしてからヘルパーに用事を渡し、ヘルパーからの質問を伝え、結果を自分の言葉で教えてくれます。ヘルパーがオンの間は、MekaHimeの紙人形が彼女の舞台の右下に立ち、ヘルパーの役を演じます。ヘルパーはそれぞれOpenRouterで自分のモデルを使います。キーは彼女が使っているものをそのまま使えます。
+
+**Hermes Agent**（新しいPowerShellウィンドウで）：
+
+```powershell
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # Hermesをインストール。終わったら新しいウィンドウを開く
+hermes model                                                  # OpenRouterを選び、キーを貼り付けて、z-ai/glm-5を選ぶ
+$key = [guid]::NewGuid().ToString('N')                        # APIサーバー用のランダムなキー
+hermes config set API_SERVER_ENABLED true
+hermes config set API_SERVER_KEY $key
+$key | Set-Clipboard                                          # 次の手順のためにコピー
+```
+
+**nanoMuse**：`Nanomuse`フォルダーにクローンし、`config.toml`を用意して、キーをnanoMuse自身の保管庫（vault）に入れます。コマンドとファイルの中身は[docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse)にあります。
+
+**つなぐ。** OpenAmikaフォルダーで`Copy-Item config\tools.example.json config\tools.json`（`config\tools.json`がまだないときだけ）と`notepad config\tools.json`を実行します。先頭とヘルパーの項目の`"enabled"`を`true`にし、Hermesの場合はキーを`"HERMES_API_KEY"`に貼り付けます（Ctrl+V）。保存して彼女を起動すると（`.\Start_OpenAmika.bat`）、ヘルパーは彼女が自分で起動します。Toolsページのヘルパーのカードが緑（`agent online`）になります。
+
+**紙人形に会う。** Useページを開くと、紙人形が彼女の舞台にすっと入ってきます。たとえば「Hermesに明日の天気を調べてもらえる？」と頼んでみてください。彼女が返事をして、吹き出しに用事を打ち込むと、そこから紙人形の出番です。ヘルパーが作業している間は考え込み、ヘルパーの進み具合を自分の吹き出しで話し、ヘルパーから質問があるときやあなたの許可が必要なときは驚いた顔をします（声で「いいよ」「だめ」と答えるか、UseページのApproveをクリック）。結果が届くと喜び、その結果を彼女が教えてくれます。紙人形は`setup_tts.py`で一緒に入ります（まとめに`OK paper doll Host`）。
+
+すべての手順の詳細と、各メッセージの意味：[docs/TOOLS.md](docs/TOOLS.md#her-helpers-set-up-hermes-agent-and-nanomuse)
+
 ## ライセンス
 
 - OpenAmikaのコードは **MIT** です（[LICENSE](LICENSE)）。サードパーティーの部分はそれぞれのライセンスに従います（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。`ui/vendor/`のLive2D Cubism CoreはMITではありません。
-- **Amika自身はMITではありません。** 彼女のキャラクター、アート、声、Live2Dモデルとその重み（[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)）はMekaHime Inc.に帰属し、個人利用ライセンスのもとで無料で使えます。個人的・非商用の利用に限り、18歳以上の方が対象です。再配布や再ホスティング、これらを使ったほかのモデルの学習はできません。彼女が登場する動画や配信を公開するときは、MekaHimeのクレジットを見える形で表記してください。
+- **Amika自身はMITではありません。** 彼女のキャラクター、アート、声、Live2Dモデルとその重み、そして彼女のヘルパーの代わりに立つ紙人形（[MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)）はMekaHime Inc.に帰属し、個人利用ライセンスのもとで無料で使えます。個人的・非商用の利用に限り、18歳以上の方が対象です。再配布や再ホスティング、これらを使ったほかのモデルの学習はできません。彼女が登場する動画や配信を公開するときは、MekaHimeのクレジットを見える形で表記してください。
+- Hermes Agent（MIT）とnanoMuse（GPL-3.0-or-later）は、あなたが自分でインストールする別のプログラムです。OpenAmikaはそれらと通信するだけです。
 - [SenseVoice](https://github.com/FunAudioLLM/SenseVoice)、[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)、[bge-m3](https://huggingface.co/BAAI/bge-m3)、[Qwen3-VL](https://github.com/QwenLM/Qwen3-VL)、[pixi-live2d-display](https://github.com/guansss/pixi-live2d-display)と[Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/)、[OpenRouter](https://openrouter.ai)、[Ollama](https://ollama.com)、[Model Context Protocol](https://modelcontextprotocol.io)の上に作られています。ありがとうございます。
 
 ## サポート

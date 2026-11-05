@@ -73,17 +73,18 @@ cd C:\
 git clone https://github.com/zeekk0/OpenAmika.git
 cd OpenAmika
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1   # her brain, ears, memory and eyes
-envs\brain\Scripts\python.exe scripts\setup_tts.py                   # her voice and Live2D model: type yes
+envs\brain\Scripts\python.exe scripts\setup_tts.py                   # her voice, her Live2D model, the paper doll: type yes
 .\Start_OpenAmika.bat                                                # start her
 ```
 
-Her voice and her Live2D model are free under MekaHime's personal-use license (see [Licenses](#licenses)): the
-`setup_tts.py` line shows it first and downloads her files only after you type `yes`.
+Her voice, her Live2D model and the paper doll are free under MekaHime's personal-use license (see
+[Licenses](#licenses)): the `setup_tts.py` line shows it first and downloads her files only after you type `yes`.
 
 Both setup commands end with a summary, one line per part: `OK` when it is done, `!!` with the fix when it is not,
 and `--` for information only (for example: no OpenRouter key yet, your first visit asks for it). Running a command
 again resumes and skips everything that is finished. When the `setup_tts.py` summary shows `OK voice MekaHime_Amika`
-and `OK Live2D model Amika`, she has her voice and her body.
+and `OK Live2D model Amika`, she has her voice and her body; `OK paper doll Host` is the stand-in for her helpers
+([Her helpers](#her-helpers-hermes-and-nanomuse)).
 
 ## Talk to her
 
@@ -118,6 +119,7 @@ name, your city and your edits), then run the two setup commands again (they fet
 | Her voice stutters or is very slow | Close other programs that use the graphics card, or turn her eyes off: `"vision": {"enabled": false}` in `settings.json`. |
 | On Ollama she is out of character, forgets things, or her replies come out broken | The model is too small. Use one of 27B or more (70B or more for the full experience), or go back to OpenRouter: Setup → Brain → OpenRouter → "Switch back to the OpenRouter preset". |
 | On Ollama she answers very slowly | If `ollama ps` shows a CPU/GPU split instead of `100% GPU`, the model does not fit in your video memory next to her. With `100% GPU`, slow replies after you interrupt her, or while she saves a memory or reflects, are normal for a local model. See [Which language model?](#which-language-model). |
+| A helper's card on the Tools page is red, or she says she cannot reach Hermes or nanoMuse | Run `envs\brain\Scripts\python.exe launch.py --check` and look at its `agent` and `hermes key` lines; every message and its fix is in [docs/TOOLS.md](docs/TOOLS.md#when-it-does-not-work). |
 
 Every part writes a log in `logs\`. For anything else, ask on [Discord](https://discord.gg/mekahime) or open an
 [issue](https://github.com/zeekk0/OpenAmika/issues). Using an AI coding agent? Point it at
@@ -128,7 +130,9 @@ Every part writes a log in `logs\`. For anything else, ask on [Discord](https://
 - **Fully Local**: install [Ollama](https://ollama.com), run `ollama pull gemma3:27b` (17 GB; or another model of
   27B or more, see [Which language model?](#which-language-model)), then on the Setup page choose Brain → Ollama →
   Detect models → Use this model. No key needed. For Ollama on another PC, type its address there before Detect models.
-- **Tools**: MCP servers and task agents she can use for you, on the Tools page ([docs/TOOLS.md](docs/TOOLS.md)).
+- **Her helpers**: Hermes Agent or nanoMuse run errands for her, with the paper doll beside her on stage
+  ([below](#her-helpers-hermes-and-nanomuse)). Any other MCP server works too, on the Tools page
+  ([docs/TOOLS.md](docs/TOOLS.md)).
 - **Smart home**: Zigbee plugs she can switch ([IoT/README.md](IoT/README.md)). It stays off until you read and
   accept the IoT safety statement ([docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)) on the Tools page. She runs on
   language models and can make mistakes: never connect heaters, locks, valves or anything that could cause harm.
@@ -136,14 +140,53 @@ Every part writes a log in `logs\`. For anything else, ask on [Discord](https://
 - **Your phone**: `Tailscale_Serve_OpenAmika.bat` makes her reachable on your own devices over
   [Tailscale](https://tailscale.com).
 
+## Her helpers: Hermes and nanoMuse
+
+She can hand errands to a helper program on your PC, [Hermes Agent](https://hermes-agent.nousresearch.com) or
+[nanoMuse](https://github.com/nano-muse/nanoMuse): it searches the web, uses a browser and works with files. She
+decides whether to help, gives the helper the task after she has answered you, relays its questions, and tells you
+the result in her own words. While a helper is switched on, MekaHime's paper doll stands at the bottom right of her
+stage and plays the helper's side. Each helper runs its own model on OpenRouter, and the key she uses works for it.
+
+**Hermes Agent**, in a new PowerShell window:
+
+```powershell
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # installs Hermes; then open a new window
+hermes model                                                  # choose OpenRouter, paste your key, pick z-ai/glm-5
+$key = [guid]::NewGuid().ToString('N')                        # a random key for its API server
+hermes config set API_SERVER_ENABLED true
+hermes config set API_SERVER_KEY $key
+$key | Set-Clipboard                                          # copied, for the next step
+```
+
+**nanoMuse**: clone it into the `Nanomuse` folder, give it a `config.toml` and put your key in its own vault; the
+commands and the file are in [docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse).
+
+**Connect them.** In the OpenAmika folder, run `Copy-Item config\tools.example.json config\tools.json` (only if
+there is no `config\tools.json` yet) and `notepad config\tools.json`. Set `"enabled": true` at the top and in the
+helper's entry; for Hermes, paste the key (Ctrl+V) as `"HERMES_API_KEY"`. Save and start her
+(`.\Start_OpenAmika.bat`): she starts her helpers herself. On the Tools page the helper's card turns green
+(`agent online`).
+
+**Meet the paper doll.** Open the Use page: the doll slides onto her stage. Ask her, for example, "Can you have
+Hermes check tomorrow's weather?". She answers, types the task in her speech bubble, and the doll takes over: it
+thinks while the helper works, speaks the helper's steps in its own bubble, looks surprised when the helper has a
+question or needs your OK (say yes or no, or click Approve on the Use page), and is happy when the result comes,
+which she then tells you. The doll comes with `setup_tts.py` (`OK paper doll Host` in its summary).
+
+Every step in detail, and what each message means: [docs/TOOLS.md](docs/TOOLS.md#her-helpers-set-up-hermes-agent-and-nanomuse).
+
 ## Licenses
 
 - OpenAmika's code is **MIT** ([LICENSE](LICENSE)). Third-party parts keep their own licenses
   ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)); the Live2D Cubism Core in `ui/vendor/` is not MIT.
-- **Amika herself is not MIT.** Her character, art, voice, Live2D model and their weights
-  ([MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)) belong to MekaHime Inc. and are free
-  under a personal-use license: personal, non-commercial use only, 18+, no redistribution or re-hosting, no training
-  other models on them, and visible credit to MekaHime when you post videos or streams with her.
+- **Amika herself is not MIT.** Her character, art, voice, Live2D model and their weights, and the paper doll that
+  stands in for her helpers ([MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)), belong to
+  MekaHime Inc. and are free under a personal-use license: personal, non-commercial use only, 18+, no redistribution
+  or re-hosting, no training other models on them, and visible credit to MekaHime when you post videos or streams
+  with her.
+- Hermes Agent (MIT) and nanoMuse (GPL-3.0-or-later) are separate programs you install yourself; OpenAmika only
+  talks to them.
 - Built on [SenseVoice](https://github.com/FunAudioLLM/SenseVoice), [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS),
   [bge-m3](https://huggingface.co/BAAI/bge-m3), [Qwen3-VL](https://github.com/QwenLM/Qwen3-VL),
   [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) with the
