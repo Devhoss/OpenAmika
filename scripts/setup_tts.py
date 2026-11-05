@@ -161,11 +161,11 @@ AVATAR_ID, AVATAR_PATH = "Amika", "live2d/Amika"
 # banks.json says "role": "agent", which keeps it out of her model picker. Its 70 files are pinned by size and SHA-256
 # in the manifest's "paper_doll" block, at a revision of their own:
 PAPER_DOLL_ID, PAPER_DOLL_PATH = "Host", "live2d/Host"
-# PLACEHOLDER, set by the maintainer who uploads live2d/Host/ to MekaHime/MekaHime_Amika: the full 40-character commit
-# of that upload (the pins above need no change; see "A new revision of her Hugging Face repository" in
-# README_IF_YOU_ARE_AI_AGENT.md). While it is empty the doll is never downloaded and its row says so; --from-dir still
+# 2026-11-05: the revision that adds live2d/Host/ (and names the doll in the model card and LICENSE). The full
+# 40-character commit; the pins above need no change (see "A new revision of her Hugging Face repository" in
+# README_IF_YOU_ARE_AI_AGENT.md). Empty would mean: the doll is never downloaded and its row says so; --from-dir still
 # installs it from a local copy, checked file by file against the pins.
-PAPER_DOLL_REV = ""
+PAPER_DOLL_REV = "b3ffaf59f4d5f192155cffd79539e9911b610f5a"
 
 ROWS: list[tuple[str, str, str]] = []   # (mark, name, detail) for the final summary
 
