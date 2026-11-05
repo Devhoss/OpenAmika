@@ -18,9 +18,9 @@ Design (docs/TOOLS.md):
   * Agent jobs run in the bridge; a poller relays their progress, questions, approval requests
     and the final report back through her (an injected turn, "personality relay"). An agent's
     approval request is released only by the user's words on a later turn (clerk, quote-verified)
-    or by a click on the Tools page — she has no approve path of her own.
+    or by a click on the Use page ("Her helpers") — she has no approve path of her own.
   * Per-tool policy for plain MCP servers: "auto" executes, "deny" hides the tool from the clerk,
-    "confirm" parks the call as PENDING for the Tools page. Agent bridge tools are auto by design:
+    "confirm" parks the call as PENDING for the Use page. Agent bridge tools are auto by design:
     their consent lives in the quote check.
   * Health: every agent bridge has a `health` tool (is the agent process up, is the key accepted?).
     A background thread probes it every _HEALTH_TTL seconds; the result shows on the Tools page, goes
@@ -30,6 +30,7 @@ Design (docs/TOOLS.md):
     agent unreachable, the brain launches that command detached (so it outlives the brain), reports
     "starting" for a grace period, and gives up after a few attempts (Start button on the Tools page
     resets the budget). The clerk waits a moment for a just-launched agent before giving up on an ask.
+    Its paths may use %VARIABLES% and be relative to the OpenAmika folder (launch_path, as in launch.py).
   * Open turns (she speaks on her own after his request, e.g. "fine, having Hermes look it up"): the
     clerk runs with the user's most recent message as the only quote source, at most once per message,
     and never takes approvals/answers from such a turn (webui._tools_after_turn decides when).
@@ -115,6 +116,7 @@ _HEALTH_TIMEOUT = 8.0             # a `health` call through the bridge must answ
 _HEALTH_ZH = {"unreachable": "它那边的程序没开（连不上）", "timeout": "它没有响应", "unauthorized": "钥匙不对（API key / token 被拒）",
               "http_error": "它回了错误", "starting": "它正在启动、还没准备好", "start_failed": "它启动失败了（看 logs/agent-*.log）",
               "refused": "它在线，但拒绝接活（Tools 页上有它的说明）",
+              "no_model": "它在线，但它自己的模型没配好（没有可用的 API key），什么事都办不了",
               "degraded": "它连上了一半（比如 MQTT 通了、zigbee2mqtt 没在线），现在不一定能用",
               "bridge": "桥接程序没反应", "error": "它那边出了错"}
 _CONNECT_ERROR_RE = re.compile(r"ConnectError|ConnectTimeout|10061|refused|lost contact|nothing answers|no reply from", re.I)
@@ -578,6 +580,21 @@ def autostart_config(scfg: dict):
             "cwd": str(raw.get("cwd") or "") or None, "env": {str(k): str(v) for k, v in env.items()}}
 
 
+_OPENAMIKA = Path(__file__).resolve().parent.parent
+
+
+def launch_path(value: str, command: bool = False) -> str:
+    """An autostart path as it is run, by the same rule as launch.py's launch_path (the launcher starts the agents
+    first, the brain restarts them): %VARIABLES% expanded (%LOCALAPPDATA%\\hermes\\bin\\hermes.exe), a relative path
+    taken from the OpenAmika folder. A bare command name (`hermes`) is left to the PATH."""
+    text = os.path.expandvars(str(value).strip())
+    if command and not ("/" in text or "\\" in text):
+        return text
+    if Path(text).is_absolute() or re.match(r"^[A-Za-z]:[\\/]", text) or text.startswith(("\\\\", "//")):
+        return text
+    return str(_OPENAMIKA / text)
+
+
 def _agent_log_path(name: str) -> Path:
     logs = Path(__file__).resolve().parent.parent / "logs"
     logs.mkdir(parents=True, exist_ok=True)
@@ -615,12 +632,13 @@ def start_agent(name: str, scfg: dict, *, force: bool = False):
             return rec                                  # still coming up
         if rec["attempts"] >= _AUTOSTART_MAX_ATTEMPTS or now - float(rec.get("last") or 0) < _AUTOSTART_MIN_GAP:
             return None
-    cmd = [cfg["command"], *cfg["args"]]
+    cmd = [launch_path(cfg["command"], command=True), *(os.path.expandvars(a) for a in cfg["args"])]
     rec.update({"attempts": rec["attempts"] + 1, "last": now, "started_at": now, "cmd": " ".join(cmd), "error": None})
     try:
         log = open(_agent_log_path(name), "ab")
         log.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} OpenAmika starting {name}: {rec['cmd']}\n".encode("utf-8"))
-        kwargs = dict(cwd=cfg["cwd"], env={**os.environ, "PYTHONIOENCODING": "utf-8", **cfg["env"]},
+        kwargs = dict(cwd=launch_path(cfg["cwd"]) if cfg["cwd"] else None,
+                      env={**os.environ, "PYTHONIOENCODING": "utf-8", **cfg["env"]},
                       stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)

@@ -40,6 +40,8 @@ def fresh(tmp_path, monkeypatch):
     monkeypatch.setattr(launch, "AVATAR_MODELS", tmp_path / "avatar" / "models")
     monkeypatch.setattr(launch, "INSTANCE", tmp_path / "logs" / "instance.json")
     monkeypatch.setattr(launch, "listeners", lambda: {})
+    monkeypatch.delenv("HERMES_HOME", raising=False)                    # never this machine's own Hermes home
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
     return tmp_path
 
 
@@ -278,3 +280,96 @@ def test_her_clock_without_a_time_zone_database_is_a_problem(fresh, monkeypatch)
     (fresh / "config" / "build_f.json").write_text(json.dumps({"timezone": "Mars/Base"}), "utf-8")
     level, detail = launch.her_clock(only_tokyo)
     assert level == "warn" and "'Mars/Base'" in detail and "falls back to Asia/Tokyo" in detail and tokyo
+
+
+# ── her helpers: the agents' start commands, Hermes's key, the paper doll ──
+
+def tools_with(name, entry, enabled=True):
+    return {"enabled": enabled, "mcpServers": {name: {"command": "python", "cwd": "../servers/openamika-agents",
+                                                       "enabled": True, "kind": "agent", **entry}}}
+
+
+def test_agent_start_commands_keep_quoted_paths_expand_variables_and_resolve_from_this_folder(monkeypatch, tmp_path):
+    monkeypatch.setenv("OA_TEST_APPDATA", str(tmp_path / "App Data"))
+    port = free_port()
+    spaced = launch.agent_services(tools_with("hermes", {"autostart": f'"{tmp_path / "My Apps" / "hermes.exe"}" gateway',
+                                                         "env": {"HERMES_URL": f"http://127.0.0.1:{port}"}}))[0]
+    assert spaced.cmd == [str(tmp_path / "My Apps" / "hermes.exe"), "gateway"]            # one path, spaces and all
+    assert spaced.health == f"http://127.0.0.1:{port}/health" and spaced.log.name == "agent-hermes.log"
+    var = launch.agent_services(tools_with("hermes", {"autostart": {
+        "command": "%OA_TEST_APPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%OA_TEST_APPDATA%/hermes"}}))[0]
+    assert var.cmd[0] == str(tmp_path / "App Data") + "/hermes/bin/hermes.exe"
+    assert var.cwd == str(tmp_path / "App Data") + "/hermes"
+    rel = launch.agent_services(tools_with("muse", {
+        "args": ["-m", "openamika_agents", "nanomuse"], "env": {"NANOMUSE_URL": f"http://127.0.0.1:{port}"},
+        "autostart": {"command": "Nanomuse/venv/Scripts/nanomuse.exe", "args": ["serve"], "cwd": "Nanomuse/data"}}))[0]
+    assert rel.cmd == [str(launch.ROOT / "Nanomuse/venv/Scripts/nanomuse.exe"), "serve"]
+    assert rel.cwd == str(launch.ROOT / "Nanomuse/data")
+    assert rel.health == f"http://127.0.0.1:{port}/api/health"           # named "muse", but it runs the nanomuse bridge
+    bare = launch.agent_services(tools_with("hermes", {"autostart": "hermes gateway"}))[0]
+    assert bare.cmd == ["hermes", "gateway"]                              # a bare name is left to the PATH
+
+
+def hermes_home_with(path, key):
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".env").write_text("# Hermes\nAPI_SERVER_ENABLED=true\n" + (f"API_SERVER_KEY={key}\n" if key is not None else ""),
+                               "utf-8")
+    return path
+
+
+def test_hermes_key_is_checked_in_the_hermes_home_and_never_shown(fresh, monkeypatch):
+    home = fresh / "hermes"
+    good = "0123456789abcdef0123456789abcdef"
+    port = free_port()
+
+    def got(key, ours, autostart=None):
+        hermes_home_with(home, key)
+        entry = {"env": {"HERMES_URL": f"http://127.0.0.1:{port}", "HERMES_API_KEY": ours},
+                 "autostart": autostart or {"command": str(home / "bin" / "hermes.exe"), "args": ["gateway"], "cwd": str(home)}}
+        tools = tools_with("hermes", entry)
+        cfg, (services, held, agents) = services_for(example_cfg(fresh), fresh / "vendor" / "tts-engine")
+        agents = launch.agent_services(tools)
+        report = checks(launch.preflight(cfg, None, None, tools, None, services, agents, [], held_iot=held))
+        assert good not in json.dumps(report)                            # the key itself never appears
+        return report
+
+    rows = got(good, good)
+    assert rows["hermes key"][0] == "ok" and str(home) in rows["hermes key"][1]
+    assert rows["agent hermes"][0] == "err" and "start command does not exist" in rows["agent hermes"][1]
+    assert got(good, "0123456789abcdef-something-else")["hermes key"][0] == "warn"
+    assert "differs" in got(good, "0123456789abcdef-something-else")["hermes key"][1]
+    assert "not set yet" in got(good, "PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env")["hermes key"][1]
+    short = got("tooshort", "tooshort")["hermes key"]
+    assert short[0] == "warn" and "shorter than 16 characters" in short[1]
+    assert got(None, good)["hermes key"][0] == "warn"                   # no key: Hermes never opens its API server
+    assert got("your_api_key_here_please_x_here", good)["hermes key"][0] == "warn"
+    # a string autostart (no cwd): found by the folder above bin\hermes.exe
+    assert got(good, good, autostart=f'"{home / "bin" / "hermes.exe"}" gateway')["hermes key"][0] == "ok"
+
+
+def test_hermes_key_check_finds_the_default_home_without_an_autostart(fresh, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(fresh / "Local"))
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    hermes_home_with(fresh / "Local" / "hermes", "0123456789abcdef0123456789abcdef")
+    tools = tools_with("hermes", {"env": {"HERMES_URL": f"http://127.0.0.1:{free_port()}",
+                                          "HERMES_API_KEY": "fedcba9876543210fedcba9876543210"}})
+    assert launch.hermes_checks(tools["mcpServers"]["hermes"], None)[0][:2] == ("warn", "hermes key")
+    monkeypatch.setenv("LOCALAPPDATA", str(fresh / "Elsewhere"))         # no Hermes home anywhere: nothing to compare
+    assert launch.hermes_checks(tools["mcpServers"]["hermes"], None) == []
+
+
+def test_the_paper_doll_row(fresh):
+    cfg = example_cfg(fresh)
+    models = fresh / "avatar" / "models"
+    install_model(models)                                                # her own model
+    hermes = tools_with("hermes", {"env": {"HERMES_URL": f"http://127.0.0.1:{free_port()}"}})
+    assert launch.paper_doll(cfg, None) == (None, None)                  # no agent, no doll: nothing to say
+    level, detail = launch.paper_doll(cfg, hermes)
+    assert level == "warn" and '"role": "agent"' in detail and "setup_tts.py" in detail
+    assert launch.paper_doll(cfg, {**hermes, "enabled": False}) == (None, None)    # the tool layer is off
+    install_model(models, "Host", role="agent")
+    assert launch.paper_doll(cfg, hermes) == ("ok", "Host · 1 motions — stands in for her helpers on the Use page")
+    assert launch.paper_doll(cfg, None)[1].endswith("shown beside her while a task agent is switched on (Tools page)")
+    services, held, agents = launch.start_plan(cfg, hermes)
+    got = checks(launch.preflight(cfg, None, None, hermes, None, services, agents, [], held_iot=held))
+    assert got["paper doll"][0] == "ok" and got["Live2D model"][1].startswith("Amika (")      # the doll is not her body

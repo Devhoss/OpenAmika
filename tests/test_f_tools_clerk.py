@@ -488,6 +488,27 @@ def test_autostart_reports_the_exit_code_when_the_process_dies(launchable):
     assert dead["reason"] == "start_failed" and "exited with code 1" in dead["detail"]
 
 
+def test_autostart_paths_expand_variables_and_resolve_from_the_openamika_folder(launchable, monkeypatch):
+    """The brain starts what the launcher starts (launch.py launch_path): %LOCALAPPDATA%-style variables, paths relative
+    to the OpenAmika folder, a bare command left to the PATH. The Tools page still shows the entry as written."""
+    monkeypatch.setenv("OA_TEST_HOME", "C:/oa-test-home")
+    cfg = launchable["cfg"]["mcpServers"]["hermes"]
+    cfg["autostart"] = {"command": "%OA_TEST_HOME%/bin/hermes.exe", "args": ["gateway", "--home=%OA_TEST_HOME%"],
+                        "cwd": "%OA_TEST_HOME%"}
+    f_tools.start_agent("hermes", cfg, force=True)
+    assert FakeProc.launches[-1].cmd == ["C:/oa-test-home/bin/hermes.exe", "gateway", "--home=C:/oa-test-home"]
+    assert FakeProc.launches[-1].kwargs["cwd"] == "C:/oa-test-home"
+    assert f_tools._status_payload()["servers"]["hermes"]["autostart"]["command"] == "%OA_TEST_HOME%/bin/hermes.exe"
+    cfg["autostart"] = {"command": "Nanomuse/venv/Scripts/nanomuse.exe", "args": ["serve"], "cwd": "Nanomuse/data"}
+    f_tools.start_agent("hermes", cfg, force=True)
+    root = Path(f_tools.__file__).resolve().parent.parent
+    assert FakeProc.launches[-1].cmd == [str(root / "Nanomuse/venv/Scripts/nanomuse.exe"), "serve"]
+    assert FakeProc.launches[-1].kwargs["cwd"] == str(root / "Nanomuse/data")
+    cfg["autostart"] = "hermes gateway"
+    f_tools.start_agent("hermes", cfg, force=True)
+    assert FakeProc.launches[-1].cmd == ["hermes", "gateway"] and FakeProc.launches[-1].kwargs["cwd"] is None
+
+
 def test_no_autostart_means_plain_unreachable(wired):
     wired["hub"].replies[("hermes", "health")] = {"ok": False, "reason": "unreachable", "detail": "Hermes: nothing answers"}
     assert f_tools.probe_health("hermes", HERMES_CFG, force=True)["reason"] == "unreachable"

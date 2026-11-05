@@ -758,6 +758,49 @@ def start_plan(cfg, tools):
     return services, held, agents
 
 
+def agent_bridge(name, scfg):
+    """Which agent bridge a config/tools.json entry runs: 'hermes' or 'nanomuse' (the word after `-m openamika_agents`
+    in its args, else its name), or None for any other server. The launcher's health gate and checks follow it, so an
+    entry may be named as the person likes."""
+    args = [str(a) for a in ((scfg or {}).get('args') or [])]
+    if 'openamika_agents' in args:
+        i = args.index('openamika_agents')
+        if i + 1 < len(args) and args[i + 1] in AGENT_HEALTH:
+            return args[i + 1]
+    return name if name in AGENT_HEALTH else None
+
+
+def autostart_spec(raw):
+    """{"command", "args", "cwd", "env"} from an entry's `autostart`: one command line (quotes keep a path with spaces
+    together, as in the brain's f_tools.autostart_config) or such an object; None when unset."""
+    if isinstance(raw, str):
+        try:
+            parts = shlex.split(raw.strip(), posix=False)
+        except ValueError:
+            parts = raw.strip().split()
+        parts = [p.strip('"') for p in parts]
+        raw = {'command': parts[0], 'args': parts[1:]} if parts else None
+    if not isinstance(raw, dict) or not str(raw.get('command') or '').strip():
+        return None
+    env = raw.get('env') if isinstance(raw.get('env'), dict) else {}
+    return {'command': str(raw['command']).strip(), 'args': [str(a) for a in (raw.get('args') or [])],
+            'cwd': str(raw.get('cwd') or '') or None, 'env': {str(k): str(v) for k, v in env.items()}}
+
+
+def is_absolute(path):
+    return Path(path).is_absolute() or bool(re.match(r'^[A-Za-z]:[\\/]', path)) or path.startswith(('\\\\', '//'))
+
+
+def launch_path(value, command=False):
+    """An autostart path as it is run: %VARIABLES% expanded (%LOCALAPPDATA%\\hermes\\bin\\hermes.exe), and a relative
+    path taken from this OpenAmika folder. A bare command name (`hermes`) is left to the PATH. The brain does the same
+    (f_tools.launch_path), so the launcher and the brain start the same program."""
+    text = os.path.expandvars(str(value).strip())
+    if command and not ('/' in text or '\\' in text):
+        return text
+    return text if is_absolute(text) else str(ROOT / text)
+
+
 def agent_services(tools):
     """Agents from config/tools.json autostart entries, so they come up here, before the brain needs them.
     A smart-home server's autostart waits for the IoT safety statement like the services do."""
@@ -768,17 +811,15 @@ def agent_services(tools):
             continue
         if not accepted and is_smart_home_server(name, scfg):
             continue
-        auto = scfg['autostart']
-        if isinstance(auto, str):
-            parts = auto.split()
-            auto = {'command': parts[0], 'args': parts[1:]}
-        if not isinstance(auto, dict) or not auto.get('command'):
+        auto = autostart_spec(scfg['autostart'])
+        if auto is None:
             continue
-        env_key, path = AGENT_HEALTH.get(name, (None, None))
+        env_key, path = AGENT_HEALTH.get(agent_bridge(name, scfg), (None, None))
         base = ((scfg.get('env') or {}).get(env_key) or '').rstrip('/') if env_key else ''
         health = base + path if base and path else None
-        out.append(Service(name, [auto['command'], *(auto.get('args') or [])], cwd=auto.get('cwd') or ROOT,
-                           env=auto.get('env') or {}, health=health, timeout=90, kind='agent',
+        cmd = [launch_path(auto['command'], command=True), *(os.path.expandvars(a) for a in auto['args'])]
+        out.append(Service(name, cmd, cwd=launch_path(auto['cwd']) if auto['cwd'] else ROOT,
+                           env=auto['env'], health=health, timeout=90, kind='agent',
                            log=LOGS / f'agent-{name}.log', url=base or None))
     return out
 
@@ -830,10 +871,10 @@ def voice_folder(folder):
     return ('ok' if clips == len(tags) else 'warn'), f'{folder.name} · {clips}/{len(tags)} emotion clips'
 
 
-def live2d_models():
-    """(level, detail) for the Live2D models she can wear (avatar/models/<name>/ with a .model3.json; an agent
-    avatar does not count). None is an error: the Use page's stage stays empty."""
-    found = []
+def avatar_folders():
+    """[(folder, its .model3.json, role, motions)] for every Live2D model in avatar/models/, in name order (the order
+    of the gateway's /api/avatar/models). role is "agent" when banks.json says so (the paper doll), else None."""
+    out = []
     for folder in sorted(AVATAR_MODELS.iterdir()) if AVATAR_MODELS.is_dir() else []:
         if not folder.is_dir():
             continue
@@ -844,11 +885,106 @@ def live2d_models():
             role = (json.loads((folder / 'banks.json').read_text('utf-8-sig')).get('config') or {}).get('role')
         except (OSError, ValueError, AttributeError):
             role = None
-        if role != 'agent':
-            found.append(f"{folder.name} ({model3[0].name}, {len(list(folder.rglob('*.motion3.json')))} motions)")
+        out.append((folder, model3[0], 'agent' if role == 'agent' else None, len(list(folder.rglob('*.motion3.json')))))
+    return out
+
+
+def live2d_models():
+    """(level, detail) for the Live2D models she can wear (avatar/models/<name>/ with a .model3.json; an agent
+    avatar does not count). None is an error: the Use page's stage stays empty."""
+    found = [f"{folder.name} ({model3.name}, {motions} motions)"
+             for folder, model3, role, motions in avatar_folders() if role != 'agent']
     if not found:
         return 'err', 'no Live2D model in avatar/models/: the stage stays empty'
     return 'ok', ' · '.join(found)
+
+
+def agents_switched_on(tools):
+    """True when config/tools.json has the tool layer on and a task agent (kind "agent", or an openamika_agents bridge)
+    switched on: then the Use page seats the paper doll beside her."""
+    if not (tools and tools.get('enabled')):
+        return False
+    return any(isinstance(scfg, dict) and scfg.get('enabled') and (scfg.get('kind') == 'agent' or agent_bridge(name, scfg))
+               for name, scfg in (tools.get('mcpServers') or {}).items())
+
+
+def paper_doll(cfg, tools):
+    """(level, detail) for the paper doll that stands in for her helpers (the first model whose banks.json says
+    "role": "agent"; scripts/setup_tts.py installs MekaHime's into avatar/models/Host), or (None, None) when there is
+    none and no task agent is on, so nobody misses it."""
+    on = agents_switched_on(tools)
+    dolls = [(folder, motions) for folder, _, role, motions in avatar_folders() if role == 'agent']
+    if dolls:
+        folder, motions = dolls[0]
+        return 'ok', (f'{folder.name} · {motions} motions — ' + ('stands in for her helpers on the Use page' if on else
+                      'shown beside her while a task agent is switched on (Tools page)'))
+    if on:
+        return 'warn', (f'a task agent is switched on, but avatar/models/ has no paper doll (a model whose banks.json says '
+                        f'"role": "agent"): her helpers get no stand-in and no speech bubbles on the Use page — run '
+                        f'{setup_tts_command(cfg)} (it installs the paper doll with her Live2D model)')
+    return None, None
+
+
+HERMES_KEY_MIN = 16      # Hermes refuses to open its API server with a shorter API_SERVER_KEY, or a placeholder
+
+
+def hermes_key_usable(key):
+    """Hermes's own rule (hermes_cli.auth.has_usable_secret, min_length=16), in short: 16 characters or more and not a
+    placeholder such as `your_api_key_here` or `xxxx`."""
+    key = (key or '').strip()
+    low = key.lower()
+    return (len(key) >= HERMES_KEY_MIN and low not in ('changeme', 'placeholder', 'example', 'dummy')
+            and not (low.startswith('your_') and low.endswith('_here'))
+            and not re.fullmatch(r'(?:sk-|ghp_|hf_)?[x\s_-]+', low))
+
+
+def hermes_home(scfg, agent):
+    """The Hermes home whose .env holds API_SERVER_KEY: HERMES_HOME in the autostart env, the autostart cwd, the folder
+    above the autostart's bin\\hermes.exe, this console's HERMES_HOME, then Hermes's default %LOCALAPPDATA%\\hermes;
+    the first that has a .env. None when none has (Hermes elsewhere, or not installed yet)."""
+    auto = autostart_spec((scfg or {}).get('autostart')) or {}
+    candidates = []
+    if (auto.get('env') or {}).get('HERMES_HOME'):
+        candidates.append(launch_path(auto['env']['HERMES_HOME']))
+    if agent is not None and auto.get('cwd'):
+        candidates.append(agent.cwd)
+    if agent is not None and Path(agent.cmd[0]).parent.name.lower() == 'bin':
+        candidates.append(str(Path(agent.cmd[0]).parent.parent))
+    if os.environ.get('HERMES_HOME'):
+        candidates.append(os.environ['HERMES_HOME'])
+    if os.environ.get('LOCALAPPDATA'):
+        candidates.append(str(Path(os.environ['LOCALAPPDATA']) / 'hermes'))
+    return next((Path(c) for c in candidates if (Path(c) / '.env').is_file()), None)
+
+
+def hermes_checks(scfg, agent):
+    """[(level, name, detail)]: does Hermes's API server get a key it accepts, and is it the one she sends? Read from the
+    Hermes home's .env (hermes_home); the key itself is never shown."""
+    home = hermes_home(scfg, agent)
+    if home is None:
+        return []
+    key = read_env(home / '.env').get('API_SERVER_KEY', '').strip()
+    ours = str((scfg.get('env') or {}).get('HERMES_API_KEY') or '').strip()
+    where = shown(home / '.env')
+    if not key:
+        try:
+            yaml_text = (home / 'config.yaml').read_text('utf-8', errors='replace')
+        except OSError:
+            yaml_text = ''
+        if re.search(r'(?m)^\s*api_server\s*:', yaml_text):
+            return []                     # set in config.yaml (gateway.api_server) instead: not checked here
+    if not hermes_key_usable(key):
+        return [('warn', 'hermes key', f'API_SERVER_KEY in {where} is missing, shorter than {HERMES_KEY_MIN} characters or '
+                                       f'a placeholder, so Hermes never opens its API server and she cannot reach it — '
+                                       f'set a long random key there and the same one as HERMES_API_KEY in '
+                                       f'config/tools.json (docs/TOOLS.md, "Set up Hermes Agent")')]
+    if not ours or ours.upper().startswith('PASTE'):
+        return [('warn', 'hermes key', f'HERMES_API_KEY in config/tools.json is not set yet: put the API_SERVER_KEY from '
+                                       f'{where} there — Hermes rejects her without it')]
+    if key != ours:
+        return [('warn', 'hermes key', f'tools.json HERMES_API_KEY differs from API_SERVER_KEY in {where} — Hermes will '
+                                       f'reject her')]
+    return [('ok', 'hermes key', f'HERMES_API_KEY is the API_SERVER_KEY in {where}')]
 
 
 def voice_checks(cfg, services):
@@ -1017,6 +1153,9 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
             report.add('ok', label, f'{port} free')
     for level, name, detail in voice_checks(cfg, services):
         report.add(level, name, detail)
+    level, detail = paper_doll(cfg, None if tools_error else tools)
+    if level:
+        report.add(level, 'paper doll', detail)
     for svc in services:
         if svc.name == 'tts':
             continue
@@ -1042,20 +1181,22 @@ def preflight(cfg, emb, vis, tools, tools_error, services, agents, procs, deep=F
                 held_servers.append(name)
                 continue
             agent = next((a for a in agents if a.name == name), None)
-            if name in AGENT_HEALTH:
-                env_key, path = AGENT_HEALTH[name]
+            bridge = agent_bridge(name, scfg)
+            if bridge:
+                env_key, path = AGENT_HEALTH[bridge]
                 base = ((scfg.get('env') or {}).get(env_key) or '').rstrip('/')
                 if base and http_json(base + path) is not None:
                     report.add('ok', f'agent {name}', f'online at {base}')
+                elif agent and not (Path(agent.exe).is_file() or shutil.which(agent.cmd[0])):
+                    report.add('err', f'agent {name}', f'not running, and its start command does not exist: '
+                                                       f'{agent.cmd[0]} — install it, or fix "autostart" in config/tools.json')
                 elif agent:
                     report.add('warn', f'agent {name}', f'not running — will be started ({agent.cmd[0]})')
                 else:
                     report.add('err', f'agent {name}', f'not running at {base or "?"} and no autostart configured (Tools page)')
-                if name == 'hermes' and agent:
-                    hermes_env = read_env(Path(agent.cwd) / '.env')
-                    ours = (scfg.get('env') or {}).get('HERMES_API_KEY', '')
-                    if hermes_env.get('API_SERVER_KEY') and ours and hermes_env['API_SERVER_KEY'] != ours:
-                        report.add('warn', 'hermes key', "tools.json HERMES_API_KEY differs from Hermes/.env API_SERVER_KEY — Hermes will reject her")
+                if bridge == 'hermes':
+                    for level, check, detail in hermes_checks(scfg, agent):
+                        report.add(level, check, detail)
             elif name == 'iot':
                 port = int((scfg.get('env') or {}).get('AMIKA_MQTT_PORT') or 1883)
                 mqtt = next((s for s in services if s.name == 'mqtt'), None)
