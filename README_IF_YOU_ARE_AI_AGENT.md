@@ -11,7 +11,8 @@ ever disagree, the code wins, and you should fix this file in the same change.
 1. **Her assets are not yours to share.** Amika's voice (GPT-SoVITS weights + reference clips), her Live2D model, her
    art and the paper doll that stands in for her helpers (`live2d/Host`) come from the Hugging Face repository
    `MekaHime/MekaHime_Amika` and belong to MekaHime Inc. under a
-   personal-use license: personal, non-commercial use only, 18+, no redistribution or re-hosting, no training,
+   personal-use license: personal use only (plus its creator rules: social media with visible credit, fan merch up
+   to US$1,000 as an individual), 18+, no redistribution or re-hosting, no training,
    fine-tuning or distilling of other models on them, visible credit to MekaHime when the person posts videos or
    streams with her. Never commit them, upload them, bake them into an image or a release, mirror them, or use them
    as training data. Installing them on the person's own machine with `scripts/setup_tts.py` is the intended use.
@@ -296,7 +297,7 @@ First it prints the license summary and asks (only on an interactive console):
 
 ```
 [voice] Amika's voice, her Live2D model and the paper doll that stands in for her helpers (https://huggingface.co/MekaHime/MekaHime_Amika) are free under MekaHime's personal-use license:
-          - personal, non-commercial use only, and you must be 18 or older
+          - personal use only, and you must be 18 or older (social media and fan merch up to US$1,000: see its creator rules)
           - no redistribution, re-hosting or resale of her voice, her Live2D model, the paper doll or their files
           - no training, fine-tuning or distilling other models on them
           - credit MekaHime visibly when you post videos or streams with her

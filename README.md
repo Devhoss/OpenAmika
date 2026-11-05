@@ -194,9 +194,12 @@ Every step in detail, and what each message means: [docs/TOOLS.md](docs/TOOLS.md
   ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)); the Live2D Cubism Core in `ui/vendor/` is not MIT.
 - **Amika herself is not MIT.** Her character, art, voice, Live2D model and their weights, and the paper doll that
   stands in for her helpers ([MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika)), belong to
-  MekaHime Inc. and are free under a personal-use license: personal, non-commercial use only, 18+, no redistribution
-  or re-hosting, no training other models on them, and visible credit to MekaHime when you post videos or streams
-  with her.
+  MekaHime Inc. and are free under a personal-use license: personal use only, 18+, no redistribution or re-hosting,
+  and no training other models on them. Two creator rules: earn on social media (videos, streams, ads, memberships,
+  sponsorships) with no limit, crediting MekaHime.AI visibly; and fan merch up to US$1,000 in total, as an
+  individual, with "MekaHime.AI" on the visible side and a small "Fan Art" label. Any other commercial use needs a
+  license from MekaHime (hi@mekahime.com). The [LICENSE](https://huggingface.co/MekaHime/MekaHime_Amika/blob/main/LICENSE)
+  on Hugging Face governs.
 - Hermes Agent (MIT) and nanoMuse (GPL-3.0-or-later) are separate programs you install yourself; OpenAmika only
   talks to them.
 - Built on [SenseVoice](https://github.com/FunAudioLLM/SenseVoice), [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS),

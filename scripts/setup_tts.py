@@ -1340,7 +1340,7 @@ def ask_voice_license() -> bool:
     """Show the license of her voice, her Live2D model and the paper doll in short on an interactive console and ask
     once."""
     print(f"\n[voice] Amika's voice, her Live2D model and the paper doll that stands in for her helpers ({HF_SITE}/{VOICE_REPO}) are free under MekaHime's personal-use license:\n"
-          "          - personal, non-commercial use only, and you must be 18 or older\n"
+          "          - personal use only, and you must be 18 or older (social media and fan merch up to US$1,000: see its creator rules)\n"
           "          - no redistribution, re-hosting or resale of her voice, her Live2D model, the paper doll or their files\n"
           "          - no training, fine-tuning or distilling other models on them\n"
           "          - credit MekaHime visibly when you post videos or streams with her\n"
