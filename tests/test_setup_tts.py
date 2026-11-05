@@ -504,6 +504,50 @@ def test_from_dir_installs_the_paper_doll_before_its_revision_is_pinned(hub, mon
     assert all(p.read_bytes() == REPO_FILES[r] for r, p in installed(hub)[2].items())
 
 
+@pytest.mark.parametrize("doll_rev", ["", DOLL_REV])
+def test_from_dir_of_a_copy_without_the_doll_still_installs_her_voice_and_model(hub, monkeypatch, tmp_path, doll_rev):
+    """A local copy of her repository at the pinned revision has no live2d/Host/ (the doll came later, at its own
+    revision): an offline install from it is not a failure. The doll's row says why; a doll already in place is only
+    checked; the license question never counts a doll that cannot come."""
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", doll_rev)
+    old = tmp_path / "copy-without-doll"
+    for rel, data in REPO_FILES.items():
+        if not rel.startswith(DOLL):
+            (old / rel).parent.mkdir(parents=True, exist_ok=True)
+            (old / rel).write_bytes(data)
+    rc, rows, out = run(hub, "--accept-voice-license", "--from-dir", str(old))
+    assert rc == 0, out
+    assert rows[VOICE][0] == "OK" and rows[MODEL][0] == "OK" and hub.requests == 0
+    assert rows[PAPER_DOLL][0] == "--" and "not copied" in rows[PAPER_DOLL][1] and "has no live2d/Host/" in rows[PAPER_DOLL][1]
+    assert ("without --from-dir" if doll_rev else "PAPER_DOLL_REV") in rows[PAPER_DOLL][1]
+    assert not hub.doll.exists() and "Done: her voice and her Live2D model are in place." in out
+    asked = []                                                       # nothing left that could come: never asked
+    monkeypatch.setattr(st, "ask_voice_license", lambda: asked.append(1) or False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    assert run(hub, "--from-dir", str(old))[0] == 0 and asked == []
+    # a doll in place (from a copy that has it) is checked against its pins, never touched
+    assert run(hub, "--accept-voice-license", "--from-dir", str(hub.repo))[0] == 0
+    rc, rows, _ = run(hub, "--from-dir", str(old))
+    assert rc == 0 and rows[PAPER_DOLL][0] == "OK" and "existing; 6 files verified" in rows[PAPER_DOLL][1]
+    installed(hub)[2]["live2d/Host/host.moc3"].write_bytes(b"x" * len(REPO_FILES["live2d/Host/host.moc3"]))
+    rc, rows, _ = run(hub, "--from-dir", str(old))
+    assert rc == 0 and rows[PAPER_DOLL][0] == "--" and "host.moc3" in rows[PAPER_DOLL][1]
+    assert "cannot be repaired from that folder" in rows[PAPER_DOLL][1] and hub.requests == 0
+
+
+def test_update_avatar_before_the_doll_revision_is_pinned_keeps_an_intact_doll(hub, monkeypatch):
+    """--update-avatar while PAPER_DOLL_REV is empty: her model is fetched again, the doll cannot be, and its intact
+    files are not reported as missing (they were checked as they are)."""
+    monkeypatch.setattr(st, "PAPER_DOLL_REV", "")
+    assert run(hub, "--accept-voice-license", "--from-dir", str(hub.repo))[0] == 0
+    rc, rows, out = run(hub, "--update-avatar")
+    assert rc == 0, out
+    assert rows[MODEL][0] == "OK" and "downloaded" in rows[MODEL][1]
+    assert rows[PAPER_DOLL][0] == "OK" and "existing; 6 files verified against the pinned list" in rows[PAPER_DOLL][1]
+    assert "not downloaded again (--update-avatar)" in rows[PAPER_DOLL][1]
+    assert not any(rel.startswith(DOLL) for rel in hub.revisions)
+
+
 def test_skip_paper_doll_leaves_it_out(hub):
     rc, rows, out = run(hub, "--accept-voice-license", "--skip-paper-doll")
     assert rc == 0, out

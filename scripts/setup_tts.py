@@ -1450,7 +1450,9 @@ def ensure_paper_doll(engine: Path, args: argparse.Namespace, ver: Verified, man
     it beside her whenever a task agent (Hermes Agent, nanoMuse) is switched on on the Tools page, and its speech
     bubbles carry the helper's side of the exchange. Checked file by file like her model; an edited banks.json is
     kept. Its files are pinned at PAPER_DOLL_REV: while that placeholder is empty nothing is downloaded (a doll already
-    in place, or one from --from-dir, is still checked against the pins)."""
+    in place, or one from --from-dir, is still checked against the pins). A --from-dir copy without live2d/Host/ (made
+    before the doll was added) installs her voice and her model as always: the doll's row is then a note, not a
+    failure."""
     dest = Path(args.paper_doll_dir).expanduser().resolve()
     name = f"paper doll {PAPER_DOLL_ID}"
     installed = dest.is_dir() and any(dest.glob("*.model3.json"))
@@ -1466,32 +1468,55 @@ def ensure_paper_doll(engine: Path, args: argparse.Namespace, ver: Verified, man
                           f"the pinned file list has no {PAPER_DOLL_PATH}/ (update OpenAmika: git pull)") +
             ": her helpers have no stand-in on her stage")
         return
-    pending = revision is None and not args.from_dir     # PAPER_DOLL_REV not set yet: it cannot be downloaded
     unpinned = (f"this OpenAmika does not pin the revision of {args.repo} that adds {PAPER_DOLL_PATH}/ yet "
                 "(PAPER_DOLL_REV in scripts/setup_tts.py is empty). Her helpers work without it; they only have no "
                 "stand-in on her stage. Update OpenAmika (git pull) and run this script again later")
-    if pending and not installed:
-        row("-- ", name, f"not downloaded: {unpinned}")
+    # Nothing to bring it from in this run: PAPER_DOLL_REV is not set yet (it cannot be downloaded), or the --from-dir
+    # copy has no live2d/Host/ (one made before the doll was added). Then a doll in place is only checked, and a missing
+    # one is a note, not a failure: her voice and her model install all the same.
+    if args.from_dir and not from_dir_has_doll(args):
+        folder = Path(args.from_dir).expanduser().resolve()
+        unreachable = (f"{folder} has no {PAPER_DOLL_PATH}/ (a copy of {args.repo} from before the doll was added). Her "
+                       "helpers work without it; they only have no stand-in on her stage. " +
+                       ("Run this script without --from-dir to download it" if revision else
+                        "This OpenAmika cannot download it yet either (PAPER_DOLL_REV in scripts/setup_tts.py is "
+                        "empty): update OpenAmika (git pull) and run this script again later"))
+    elif revision is None and not args.from_dir:
+        unreachable = unpinned
+    else:
+        unreachable = ""
+    if unreachable and not installed:
+        row("-- ", name, f"not {'copied' if args.from_dir else 'downloaded'}: {unreachable}")
         return
-    if not (installed or args.accept_voice_license or args.verify or pending):
+    if not (installed or args.accept_voice_license or args.verify or unreachable):
         row("!! ", name, not_accepted(args))
         return
-    probe = argparse.Namespace(**{**vars(args), "verify": True}) if pending else args     # pending: check, never fetch
+    # unreachable: check, never fetch; and not as --update-avatar either, which counts every intact file as one to fetch
+    probe = argparse.Namespace(**{**vars(args), "verify": True, "update_avatar": False}) if unreachable else args
     stats = fetch_assets("the paper doll", files, dest, lambda p: f"{PAPER_DOLL_PATH}/{p}", probe, ver,
                          keep=("banks.json",), revision=revision)
     good, why = check_paper_doll(dest)
     if stats["bad"]:
-        if pending:
+        if unreachable:
             row("-- ", name, f"{dest}: {len(stats['bad'])} of {len(files)} files missing or not the pinned ones "
                              f"({', '.join(stats['bad'][:4])}{' ...' if len(stats['bad']) > 4 else ''}); they cannot be "
-                             f"repaired from Hugging Face: {unpinned}")
+                             f"repaired {'from that folder' if args.from_dir else 'from Hugging Face'}: {unreachable}")
         else:
             row("!! ", name, verify_failed(dest, stats["bad"], files))
         return
     note = (files_note(stats, files, args, revision) if revision or stats["fetched"] else
             f"existing; {len(files)} files verified against the pinned list" +
             ("; your banks.json kept" if stats["kept"] else ""))
+    if unreachable and args.update_avatar:
+        note += ("; not copied again (--update-avatar): that folder has no paper doll" if args.from_dir else
+                 "; not downloaded again (--update-avatar): PAPER_DOLL_REV is not set yet")
     row("OK " if good else "!! ", name, f"{dest} ({note}; {why}; {DOLL_ROLE})")
+
+
+def from_dir_has_doll(args: argparse.Namespace) -> bool:
+    """Does the --from-dir copy hold the paper doll (live2d/Host/)? A copy made before the doll was added does not."""
+    return bool(args.from_dir) and (Path(args.from_dir).expanduser().resolve() /
+                                    Path(*PAPER_DOLL_PATH.split("/"))).is_dir()
 
 
 def write_manifest_from(folder: Path, out: Path, revision: str) -> int:
@@ -1887,9 +1912,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     doll_dir = Path(args.paper_doll_dir).expanduser()
     voice_missing = args.update_voice or not (voice_dir / "character.json").is_file()
     avatar_missing = args.update_avatar or not any(avatar_dir.glob("*.model3.json"))
-    # the paper doll counts only when it can come in this run (its revision is pinned, or a local copy, or another
-    # revision asked for): an install that pulls a newer OpenAmika is then asked again, since the license covers it too
-    doll_reachable = bool(PAPER_DOLL_REV.strip()) or bool(args.from_dir) or args.voice_revision != VOICE_REV
+    # the paper doll counts only when it can come in this run (its revision is pinned, or a local copy that has it, or
+    # another revision asked for): an install that pulls a newer OpenAmika is then asked again, since the license
+    # covers it too
+    doll_reachable = (from_dir_has_doll(args) if args.from_dir else
+                      bool(PAPER_DOLL_REV.strip()) or args.voice_revision != VOICE_REV)
     doll_missing = args.update_avatar or not any(doll_dir.glob("*.model3.json"))
     wanted = ((voice_missing and not (args.skip_voice or args.voice_from)) or (avatar_missing and not args.skip_avatar)
               or (doll_missing and doll_reachable and not args.skip_paper_doll))
