@@ -373,3 +373,29 @@ def test_the_paper_doll_row(fresh):
     services, held, agents = launch.start_plan(cfg, hermes)
     got = checks(launch.preflight(cfg, None, None, hermes, None, services, agents, [], held_iot=held))
     assert got["paper doll"][0] == "ok" and got["Live2D model"][1].startswith("Amika (")      # the doll is not her body
+
+
+def test_the_shipped_tools_example_starts_the_helpers_from_their_documented_homes(fresh, monkeypatch):
+    """config/tools.example.json, copied as it is and switched on: Hermes from its default home (%LOCALAPPDATA%/hermes,
+    no path to edit), nanoMuse from the Nanomuse folder of an OpenAmika in C:/OpenAmika (README, docs/TOOLS.md), both
+    through the bridge in servers/openamika-agents; the key placeholder is named as not set yet."""
+    example = json.loads((ROOT / "config" / "tools.example.json").read_text("utf-8"))
+    assert example["enabled"] is False and not any(s.get("enabled") for s in example["mcpServers"].values())
+    for name in ("hermes", "nanomuse"):
+        entry = example["mcpServers"][name]
+        assert entry["kind"] == "agent" and entry["args"] == ["-m", "openamika_agents", name]
+        assert (ROOT / "brain" / entry["cwd"] / "openamika_agents" / "adapters" / f"{name}.py").is_file()
+        entry["enabled"] = True
+    example["enabled"] = True
+    monkeypatch.setenv("LOCALAPPDATA", str(fresh / "Local"))
+    agents = {a.name: a for a in launch.agent_services(example)}
+    assert agents["hermes"].cmd == [str(fresh / "Local") + "/hermes/bin/hermes.exe", "gateway"]
+    assert agents["hermes"].cwd == str(fresh / "Local") + "/hermes"
+    assert agents["hermes"].health == "http://127.0.0.1:8642/health"
+    assert agents["nanomuse"].cmd[:4] == ["C:/OpenAmika/Nanomuse/venv/Scripts/nanomuse.exe", "serve", "--config",
+                                          "C:/OpenAmika/Nanomuse/data/config.toml"]
+    assert agents["nanomuse"].health == "http://127.0.0.1:8787/api/health"
+    hermes_home_with(fresh / "Local" / "hermes", "0123456789abcdef0123456789abcdef")
+    rows = launch.hermes_checks(example["mcpServers"]["hermes"], agents["hermes"])
+    assert rows[0][0] == "warn" and "not set yet" in rows[0][2]
+    assert launch.agents_switched_on(example) and not launch.agents_switched_on({**example, "enabled": False})

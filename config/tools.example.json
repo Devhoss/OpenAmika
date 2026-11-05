@@ -1,5 +1,5 @@
 {
-  "_readme": "Copy to config/tools.json (gitignored) and edit; the Tools page edits this file too. Servers speak MCP: stdio entries need command/args (command 'python' = the brain's interpreter); remote entries need url (+headers). kind 'agent' marks a personal task agent behind servers/openamika-agents (ask/status/answer/stop); persona_note is what she is told about the server, in character ({user_name} = your name). Per-tool policy for plain servers: auto = runs when she agreed; confirm = waits for your approval on the Tools page; deny = hidden. clerk_role = which model slot runs the post-speech clerk (surface is cheap and enough). Smart-home servers (iot = servers/openamika-iot, Home Assistant, or kind 'iot') stay off until you accept the IoT safety statement (docs/IOT_DISCLAIMER.md) on the Tools page, which records it here as iot_disclaimer {version, accepted_at}; it is never in this example.",
+  "_readme": "Copy to config/tools.json (gitignored) and edit; the Tools page edits this file too (its Professional mode shows every field). Her helpers step by step: README, 'Her helpers', and docs/TOOLS.md. Servers speak MCP: stdio entries need command/args (command 'python' = the brain's interpreter); remote entries need url (+headers). kind 'agent' marks a personal task agent behind servers/openamika-agents (ask/status/answer/stop); while one is switched on (and 'enabled' at the top), the paper doll from avatar/models/Host stands in for it on her stage. autostart = the agent's own start command, run when it is not running: %VARIABLES% work, and a relative path is taken from the OpenAmika folder. hermes: put the API_SERVER_KEY of Hermes's .env (%LOCALAPPDATA%/hermes/.env) in HERMES_API_KEY. nanomuse: the paths assume OpenAmika in C:/OpenAmika with nanoMuse in its Nanomuse folder; NANOMUSE_LANGUAGE = your language (en, ja, zh-CN). persona_note is what she is told about the server, in character ({user_name} = your name). Per-tool policy for plain servers: auto = runs when she agreed; confirm = waits for your approval on the Use page; deny = hidden. clerk_role = which model slot runs the post-speech clerk (surface is cheap and enough). Smart-home servers (iot = servers/openamika-iot, Home Assistant, or kind 'iot') stay off until you accept the IoT safety statement (docs/IOT_DISCLAIMER.md) on the Tools page, which records it here as iot_disclaimer {version, accepted_at}; it is never in this example.",
   "enabled": false,
   "clerk_role": "surface",
   "limits": {
@@ -12,7 +12,7 @@
       "command": "python",
       "args": ["-m", "openamika_agents", "hermes"],
       "cwd": "../servers/openamika-agents",
-      "autostart": "C:\\Users\\you\\AppData\\Local\\hermes\\bin\\hermes.exe gateway",
+      "autostart": {"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"},
       "env": {
         "HERMES_URL": "http://127.0.0.1:8642",
         "HERMES_API_KEY": "PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env",
@@ -30,18 +30,19 @@
       "args": ["-m", "openamika_agents", "nanomuse"],
       "cwd": "../servers/openamika-agents",
       "autostart": {
-        "command": "C:/Users/you/nanomuse/venv/Scripts/nanomuse.exe",
-        "args": ["serve", "--no-qr", "--host", "127.0.0.1", "--port", "8787"],
-        "cwd": "C:/Users/you/nanomuse/data",
-        "env": {"NANOMUSE_CONFIG": "C:/Users/you/nanomuse/data/config.toml", "NANOMUSE_DATA_DIR": "C:/Users/you/nanomuse/data", "NANOMUSE_ONBOARDED": "1"}
+        "command": "C:/OpenAmika/Nanomuse/venv/Scripts/nanomuse.exe",
+        "args": ["serve", "--config", "C:/OpenAmika/Nanomuse/data/config.toml", "--no-qr", "--host", "127.0.0.1", "--port", "8787"],
+        "cwd": "C:/OpenAmika/Nanomuse/data",
+        "env": {"PYTHONUTF8": "1"}
       },
       "env": {
         "NANOMUSE_URL": "http://127.0.0.1:8787",
-        "NANOMUSE_TOKEN_FILE": "C:/Users/you/nanomuse/data/server_token"
+        "NANOMUSE_TOKEN_FILE": "C:/OpenAmika/Nanomuse/data/server_token",
+        "NANOMUSE_LANGUAGE": "en"
       },
       "enabled": false,
       "kind": "agent",
-      "persona_note": "nanoMuse——{user_name}手机和电脑上的另一个小帮手，能替你处理邮件、日程、买东西、在手机上操作 app。交代一句话，它办完会回来报告。"
+      "persona_note": "nanoMuse——{user_name}电脑上的另一个小帮手程序，能替你上网搜资料、开浏览器查网页、在它自己的文件夹里整理文件。把要办的事用一句话交代给它，它办完会回来报告，你再转告他。"
     },
     "iot": {
       "command": "python",
