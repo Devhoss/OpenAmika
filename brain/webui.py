@@ -3158,14 +3158,10 @@ def _ws_run_generation(sid: str, turn_id: str, text: str,
         parts = _with_round_context(parts, entry.get("context", ""))
         parts = _with_capabilities(parts)
         parts["conv_id"] = sid   # xAI 缓存：surface 也 pin 到同一 server 命中前缀缓存（非 xai provider 忽略）
-        # 表层专用分发：本地 ollama / cerebras 也走 OpenAI 兼容流式。
-        _sp = model_config.get("provider")
-        if _sp in ("ollama", "cerebras"):
-            _surface_stream = _stream_openai(parts, model_config["model"], _sp,
-                                             no_think=model_config.get("no_think", False),
-                                             reasoning_effort=model_config.get("reasoning_effort"))
-        else:
-            _surface_stream = _pick_stream(parts, model_config)
+        # 表层和深层一样走 _pick_stream：f_roles 把 OpenRouter / Ollama / Alibaba 的角色模型交给各自的 transport。
+        # A surface on Ollama must not call _stream_openai directly: f_bridge's metered stream takes only anthropic /
+        # xai, so every Fully Local turn failed before any model call ("Build F supports its configured …").
+        _surface_stream = _pick_stream(parts, model_config)
         for chunk in _surface_stream:
             if cancel.is_set():
                 _handle_cancel()

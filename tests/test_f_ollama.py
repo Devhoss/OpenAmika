@@ -1,6 +1,7 @@
 """The fully-local option: Ollama as a role transport (f_ollama + the role manager's generated options)."""
 import contextlib
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -185,6 +186,25 @@ class RoleManagerTests(unittest.TestCase):
     def tearDown(self):
         self.memory.close()
         self.tmp.cleanup()
+
+    def test_a_surface_turn_on_ollama_reaches_its_transport(self):
+        """Fully Local: her surface turn goes through _pick_stream to the Ollama transport, as deep does. webui used to
+        hand an Ollama surface to _stream_openai, which the metered bridge refuses ("Build F supports its configured
+        Anthropic/xAI response models."): no Fully Local turn ever got a reply."""
+        http = self.g["http_requests"]
+        http.responses = [Response(lines=ndjson(
+            {"model": "qwen2.5:7b", "message": {"role": "assistant", "content": "reply: hi"}, "done": False},
+            {"model": "qwen2.5:7b", "message": {"role": "assistant", "content": ""}, "done": True, "done_reason": "stop",
+             "prompt_eval_count": 12, "eval_count": 3}))]
+        parts = {"system": "s", "user_content": "u", "_f_phase": "surface"}
+        text = "".join(self.g["_pick_stream"](parts, self.g["AVAILABLE_MODELS"]["surface:ollama:qwen2.5:7b"]))
+        self.assertEqual(text, "reply: hi")
+        self.assertEqual(http.calls[-1][0], "http://127.0.0.1:11434/api/chat")
+        # and her surface turn uses that dispatch, whatever the provider
+        source = (ROOT / "brain" / "webui.py").read_text(encoding="utf-8")
+        run = source[source.index("def _ws_run_generation("):]
+        run = run[:run.index("\ndef ", 1)]
+        self.assertEqual(re.findall(r"_surface_stream = (.+)", run), ["_pick_stream(parts, model_config)"])
 
     def test_options_selection_pricing_and_reload(self):
         for role in ROLES:
