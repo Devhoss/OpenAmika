@@ -359,8 +359,10 @@ first: in almost all cases it is the better setup, and it costs a few dollars a 
 - **Fully Local**: every role on Ollama, no key. Only with a model of **27B parameters or more**; **70B or more**
   gives the full, reliable experience. A model under 27B may be really bad for her: it loses her character, forgets
   what the person told her and breaks her output contract (the surface's four lines, the deep's
-  `[register_emotion]"…"` runs, the writer's JSON). Do not set the person up on one because it is what fits their
-  GPU: recommend Semi-Local, or Ollama on a second machine, instead.
+  `[register_emotion]"…"` runs, the writer's JSON). It is also slower: all four roles take turns on the one model,
+  so after the person interrupts her, or while she saves a memory or reflects, a reply can take 5–50 s (*How fast*,
+  below). Do not set the person up on one because it is what fits their GPU: recommend Semi-Local, or Ollama on a
+  second machine, instead.
 
 Check: `launch.py --check` shows `OK API keys …` or `-- API keys  no OpenRouter key yet …`.
 
@@ -418,6 +420,27 @@ she becomes slow. When the person's GPU has no "yes" for the model they want:
   `nvidia-smi -L`, in Ollama's environment) and keep her parts on the other. They all use CUDA device 0 by default;
   when that is the card Ollama got, set `speech_device`, `embedder.device` and `vision.device` in `settings.json` to
   `cuda:1` and add `--device cuda:1` to `services.tts.command`.
+
+**How fast, and why Fully Local is often slower than that.** mekahime.com/openamika estimates the time before her
+voice starts from the card's memory bandwidth: a dense model reads all its weights for every token it writes, at ~70%
+of the bandwidth, and takes in prompt tokens ~50 times faster; her voice starts once the model has read the new part
+of her prompt and written ~30 tokens (her status, tone and mode lines, then her first clause). From a cached prompt
+to reading all ~8k tokens again, that is ≈ 0.7–2.8 s on an RTX 5090 with `gemma3:27b` and ≈ 1.6–7.4 s on an RTX PRO
+6000 with `qwen2.5:72b` (Semi-Local: ≈ 0.8 s on either), with no waiting counted. Ollama serves one request per model
+at a time (`OLLAMA_NUM_PARALLEL` defaults to 1; each extra slot adds another KV cache to the tables above) and the
+four roles share the model, so a call waits for whatever another role is writing, then reads its whole prompt again,
+since that role's prompt replaced it in the cache. Three things hold the model between her replies: a cancelled
+stream (the person interrupted her, or kept talking after a speculative turn began) is drained to its end, not
+aborted (`drain_cancelled_streams` in `config/build_f.json`, up to 30 s for the surface, 90 s for the deep); the
+memory writer starts as soon as she stops speaking; a reflection (the deep's 【想想】, or the idle reflection) runs while
+the conversation goes on, thinking where the model can (`THINKING_ROLES` in `brain/f_ollama.py`). In MekaHime's
+ledger of 2026-11-02 a quarter of the surface and deep calls were drained; the deep wrote 199 tokens (median), the
+memory writer 463 (p90 759), the reflection 454 visible (p90 658), 1,296 with its reasoning (p90 2,891). At ~75
+tokens/s (`gemma3:27b` on an RTX 5090) that holds the model ~2.7 s, ~6–10 s and ~6–9 s (~17–38 s for a model that
+thinks); at ~27 tokens/s (`qwen2.5:72b` on an RTX PRO 6000) ~7 s, ~17–28 s and ~17–24 s. So a reply that lands behind
+one of them takes 5–50 s; the page's "Up to" is the reply behind the memory writer (p90) that then reads its prompt
+again: ≈ 13 s on an RTX 5090 with a 27B model, ≈ 36 s on an RTX PRO 6000 with a 70B one. Say so before the person
+chooses Fully Local.
 
 To switch: `ollama pull gemma3:27b` (or the model chosen above), then on the page: Setup → Brain → Ollama → Detect
 models → Use this model. Headless, with her running (the speech gateway checks that `Origin` equals the address you
@@ -578,7 +601,7 @@ Not installed by the setup; the core runs without them.
 - **Ollama** (Fully Local): §5.4. Only a model of 27B or more (70B or more for the full, reliable experience;
   smaller ones break her character and her format). Next to her on one card, a 27B model needs a 32 GB GPU and a 70B
   one 72–96 GB; otherwise Ollama on a second PC (Setup → Brain takes its URL), or, in almost every case the better
-  answer, Semi-Local.
+  answer, Semi-Local. Fully Local is slower too (§5.4, *How fast*).
 - **Phone**: `Tailscale_Serve_OpenAmika.bat` (needs Tailscale with MagicDNS + HTTPS); one conversation tab at a time.
 
 ## 9. Troubleshooting
@@ -647,8 +670,9 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
 - `-- API keys  no OpenRouter key yet …` → §5.4. `!! Ollama  not answering at …` → start Ollama (or fix its address
   on Setup → Brain); `!! Ollama model X  not pulled — ollama pull X …` → run that.
 - On Ollama she is slow → `ollama ps`: a CPU/GPU split under `PROCESSOR` instead of `100% GPU` means the model does
-  not fit next to her (the tables in §5.4). On Ollama she is out of character, forgets, or her lines come out broken
-  → the model is under 27B: §5.4.
+  not fit next to her (the tables in §5.4); with `100% GPU`, slow replies after an interruption, or while she saves a
+  memory or reflects, are her roles waiting for one another on the one model (§5.4, *How fast*), not a fault. On
+  Ollama she is out of character, forgets, or her lines come out broken → the model is under 27B: §5.4.
 - `!! her clock  <python> has no time-zone database (the tzdata package), so the brain cannot start — …` → Windows
   has none of its own and the brain builds its zone at import: run the setup again, or `<python> -m pip install
   tzdata` (it is in `brain/requirements.txt`). `-- her clock  build_f.json timezone 'X' is not a time zone (…) — the

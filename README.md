@@ -52,13 +52,15 @@ replies, runs one of two ways:
   a month (about $1.50 if you talk 30 turns a day, about $5 at 100 turns a day).
 - **Fully Local**: on your PC with [Ollama](https://ollama.com). Use a model of **27B parameters or more**; **70B or
   more** gives the full, reliable experience. Models smaller than 27B may be really bad: she loses her character,
-  forgets what you told her and breaks her reply format.
+  forgets what you told her and breaks her reply format. A local model is also slower: all her thinking takes turns
+  on it, so after you interrupt her, or while she saves a memory or reflects, a reply can take 5–50 s.
 
 A local model needs its own video memory on top of the ~6 GB her ears, memory and voice use (~10 GB with her eyes):
-about 19 GB for a 27B model such as `gemma3:27b`, 24 GB for a 32B one such as `qwen3:32b`, and 46–50 GB for a 70B
-one (`llama3.3:70b`, `qwen2.5:72b`). So one 32 GB card (RTX 5090) holds a 27B model next to all of her (a 32B one
-only with her eyes off); a 24 GB card does not. A 70B model fits next to her only on a 72–96 GB workstation card.
-Otherwise run Ollama on a second PC (the Setup page takes its address), or stay Semi-Local. How to switch:
+about 19 GB for a 27B model such as `gemma3:27b`, 24 GB for a 32B one such as `qwen3:32b`, and 50 GB for a 70B one
+such as `qwen2.5:72b`. So one 32 GB card (RTX 5090) holds a 27B model next to all of her (a 32B one only with her
+eyes off); a 24 GB card does not. A 70B model fits next to her only on a 72–96 GB workstation card. Otherwise run
+Ollama on a second PC (the Setup page takes its address), or stay Semi-Local. Whichever model you run, pick one that
+supports Chinese, since her prompts are written in it (`llama3.3:70b`, for one, does not). How to switch:
 [Optional add-ons](#optional-add-ons).
 
 ## Set her up
@@ -115,7 +117,7 @@ name, your city and your edits), then run the two setup commands again (they fet
 | She answers in text but you hear nothing | Give her voice about 20 seconds after a start, then click the page once. The health light must show TTS green. |
 | Her voice stutters or is very slow | Close other programs that use the graphics card, or turn her eyes off: `"vision": {"enabled": false}` in `settings.json`. |
 | On Ollama she is out of character, forgets things, or her replies come out broken | The model is too small. Use one of 27B or more (70B or more for the full experience), or go back to OpenRouter: Setup → Brain → OpenRouter → "Switch back to the OpenRouter preset". |
-| On Ollama she answers very slowly | The model does not fit in your video memory next to her (`ollama ps` shows a CPU/GPU split instead of `100% GPU`). See [Which language model?](#which-language-model). |
+| On Ollama she answers very slowly | If `ollama ps` shows a CPU/GPU split instead of `100% GPU`, the model does not fit in your video memory next to her. With `100% GPU`, slow replies after you interrupt her, or while she saves a memory or reflects, are normal for a local model. See [Which language model?](#which-language-model). |
 
 Every part writes a log in `logs\`. For anything else, ask on [Discord](https://discord.gg/mekahime) or open an
 [issue](https://github.com/zeekk0/OpenAmika/issues). Using an AI coding agent? Point it at
