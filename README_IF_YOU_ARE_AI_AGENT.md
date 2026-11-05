@@ -899,7 +899,7 @@ envs\brain\Scripts\python.exe -m pip install -r requirements-dev.txt
 envs\brain\Scripts\python.exe -B -m pytest tests -k "not live" -p no:cacheprovider -q
 ```
 
-About 490 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
+About 480 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
 ledger, the control proxies, the tools clerk (with agent autostart and health), the agents bridge against in-process
 fakes of Hermes and nanoMuse (`tests/test_agents_bridge.py`: jobs, approvals, questions, stop, health with
 `no_model` and `refused`, the copied-home session fallback, a real MCP stdio round trip), the IoT safety statement,

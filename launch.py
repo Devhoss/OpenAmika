@@ -963,7 +963,8 @@ def hermes_checks(scfg, agent):
     home = hermes_home(scfg, agent)
     if home is None:
         return []
-    key = read_env(home / '.env').get('API_SERVER_KEY', '').strip()
+    # Hermes reads its .env over the environment it was started with (which the launcher passes on)
+    key = (read_env(home / '.env').get('API_SERVER_KEY') or os.environ.get('API_SERVER_KEY') or '').strip()
     ours = str((scfg.get('env') or {}).get('HERMES_API_KEY') or '').strip()
     where = shown(home / '.env')
     if not key:

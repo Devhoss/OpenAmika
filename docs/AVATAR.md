@@ -48,7 +48,8 @@ avatar/models/Host/
 ```
 
 - **Found by** the gateway's registry (`GET /api/avatar/models` marks it `"role": "agent"` and passes its `stage`
-  placement); her model picker and the Setup page leave it out, and `launch.py --check` reports it on its own
+  placement). Her model picker on the Use page never offers it; the Setup page lists it as `Host (agent avatar)
+  (agent)`, and a save of its banks there keeps its role and placement. `launch.py --check` reports it on its own
   `paper doll` row instead of as a model of hers. The first agent model in folder-name order is used; one doll
   stands in for every helper.
 - **Seated** by `ui/live2d-engine.js` (`loadAgent`, after her own model has loaded) whenever the Use page's poll of

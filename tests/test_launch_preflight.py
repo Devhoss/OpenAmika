@@ -41,6 +41,7 @@ def fresh(tmp_path, monkeypatch):
     monkeypatch.setattr(launch, "INSTANCE", tmp_path / "logs" / "instance.json")
     monkeypatch.setattr(launch, "listeners", lambda: {})
     monkeypatch.delenv("HERMES_HOME", raising=False)                    # never this machine's own Hermes home
+    monkeypatch.delenv("API_SERVER_KEY", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
     return tmp_path
 
@@ -345,6 +346,8 @@ def test_hermes_key_is_checked_in_the_hermes_home_and_never_shown(fresh, monkeyp
     assert got("your_api_key_here_please_x_here", good)["hermes key"][0] == "warn"
     # a string autostart (no cwd): found by the folder above bin\hermes.exe
     assert got(good, good, autostart=f'"{home / "bin" / "hermes.exe"}" gateway')["hermes key"][0] == "ok"
+    monkeypatch.setenv("API_SERVER_KEY", good)                          # set for the whole session, not in its .env
+    assert got(None, good)["hermes key"][0] == "ok"
 
 
 def test_hermes_key_check_finds_the_default_home_without_an_autostart(fresh, monkeypatch):

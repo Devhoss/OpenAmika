@@ -255,6 +255,7 @@ below are what they say.
 | `agent has no model`: `nanoMuse … is running but has no working model …`, or she says nanoMuse failed with `The model provider refused the API key. Check it under Connections.` | nanoMuse has no OpenRouter key, or a wrong one | `nanomuse vault set OPENROUTER_API_KEY --config …` again, and `api_key = "{{vault:OPENROUTER_API_KEY}}"` in its `config.toml`; then end `nanomuse.exe` in Task Manager, and OpenAmika starts it again. A model picked in nanoMuse's own web app (Connections) overrides `config.toml` |
 | `nanoMuse is running but rejects the token (…)` | `NANOMUSE_TOKEN_FILE` points at another data folder | point it at `<data_dir>\server_token` |
 | `nanoMuse is still starting (…)` / `agent starting…` | it is coming up | wait (up to 90 seconds) |
+| two nanoMuse tasks at once come back mixed | the bridge keeps one nanoMuse thread, and a message sent during a run joins that run | give it one task at a time |
 | `timed out waiting for Hermes` / `… nanoMuse` | the job ran past 15 minutes, often an approval nobody answered | answer on the Use page; for longer jobs add `--timeout 1800` to the entry's `args` |
 | no browser window | the helper's browser runs hidden | Hermes: step 4; nanoMuse: `[browser] headless = false` |
 | `-- paper doll  a task agent is switched on, but avatar/models/ has no paper doll …` | the doll is not installed | `envs\brain\Scripts\python.exe scripts\setup_tts.py` |
