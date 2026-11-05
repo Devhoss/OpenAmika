@@ -375,6 +375,23 @@ def test_failed_job_with_a_connection_error_is_explained_in_plain_words(wired):
     assert f_tools._HEALTH["hermes"]["ok"] is False and f_tools._HEALTH["hermes"]["reason"] == "unreachable"
 
 
+def test_a_job_the_agent_itself_refused_is_not_called_unreachable(wired):
+    """A running agent that would not do it (Hermes's HTTP 429, nanoMuse's model refusing its key) is reported with
+    its reason, and its health is asked again; only a connection error means "联系不上"."""
+    for error in ("Hermes refused POST /v1/runs: HTTP 429 concurrent_run_limit",
+                  "The model provider refused the API key. Check it under Connections."):
+        wired["relays"].clear()
+        f_tools._HEALTH.clear()
+        _job()
+        wired["hub"].replies[("hermes", "status")] = {"job": "j1", "state": "failed", "cursor": 1, "events": [], "error": error}
+        f_tools._poll_once()
+        note = wired["relays"][0][1]
+        assert "联系不上" not in note and error[:40] in note
+        assert (f_tools._HEALTH.get("hermes") or {}).get("reason") != "unreachable"
+    assert f_tools._CONNECT_ERROR_RE.search("httpx.ConnectError: [Errno 111] Connection refused")
+    assert f_tools._CONNECT_ERROR_RE.search("No connection could be made because the target machine actively refused it")
+
+
 def test_clerk_never_sees_status_or_health_as_tools(wired):
     wired["state"]["reply"] = '{"calls":[],"answers":[],"note":"nothing"}'
     f_tools.run_clerk("t1", "hi there", "Hey.", "")

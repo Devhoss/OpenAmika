@@ -119,7 +119,10 @@ _HEALTH_ZH = {"unreachable": "它那边的程序没开（连不上）", "timeout
               "no_model": "它在线，但它自己的模型没配好（没有可用的 API key），什么事都办不了",
               "degraded": "它连上了一半（比如 MQTT 通了、zigbee2mqtt 没在线），现在不一定能用",
               "bridge": "桥接程序没反应", "error": "它那边出了错"}
-_CONNECT_ERROR_RE = re.compile(r"ConnectError|ConnectTimeout|10061|refused|lost contact|nothing answers|no reply from", re.I)
+# a job that died because the agent could not be reached (not one the agent refused to do: "Hermes refused POST
+# /v1/runs: HTTP 429", nanoMuse's "The model provider refused the API key" are answers from a running agent)
+_CONNECT_ERROR_RE = re.compile(r"ConnectError|ConnectTimeout|10061|(?:actively|connection) refused|lost contact|"
+                               r"nothing answers|no reply from", re.I)
 _AUTOSTART_GRACE = 90.0           # seconds an agent gets to come up after we launched it
 _AUTOSTART_MIN_GAP = 120.0        # never relaunch more often than this
 _AUTOSTART_MAX_ATTEMPTS = 3       # per enable cycle (reset by a config save, the Start button, or the agent coming up)
