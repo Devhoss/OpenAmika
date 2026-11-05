@@ -13,7 +13,8 @@ Amika's voice is downloaded from the Hugging Face repository
 [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) after you accept its personal-use
 license when the script asks (no account is needed once the repository is public; until then, a read token in
 `HF_TOKEN`), and every file is checked against `scripts/MekaHime_Amika.manifest.json`. The same repository, under the same license, holds her
-Live2D model; the script puts it into `avatar/models/Amika/`.
+Live2D model and the paper doll that stands in for her helpers; the script puts them into `avatar/models/Amika/` and
+`avatar/models/Host/`.
 Install details, flags, layout and the package list are in [`tts-engine/README.md`](tts-engine/README.md).
 
 OpenAmika's launcher starts the server as one process on port 8002 from `settings.json` → `services.tts`

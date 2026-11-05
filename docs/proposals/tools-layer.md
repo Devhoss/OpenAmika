@@ -1,7 +1,12 @@
 # OpenAmika Tools Layer — research & design proposal
 
-*Researched 2026-10-20 (web + legacy-code review). Status: **v1 implemented** — `brain/f_tools.py`,
-`servers/openamika-iot/`, the Tools page. This document preserves the reasoning and the deferred items.*
+*Researched 2026-10-20 (web + legacy-code review). Status: **superseded** — kept for the reasoning and the
+deferred items only. What runs today is described in [docs/TOOLS.md](../TOOLS.md): she speaks first and a
+post-speech clerk hands over only what she agreed to (the pre-deep tool pass below is gone), and personal task
+agents come in through `servers/openamika-agents` (Hermes Agent and nanoMuse adapters), with MekaHime's paper
+doll standing in for them on her stage. "Muse" below was guessed to be Meta's assistant and "never
+product-specific adapters" was the plan; what shipped is a small adapter each for Hermes Agent and nanoMuse
+behind one bridge.*
 
 ## Decisions
 

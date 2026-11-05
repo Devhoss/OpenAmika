@@ -43,11 +43,12 @@ GPT-SoVITS v2ProPlus, MIT), derived from the OpenSakura voice server. One comman
 envs\brain\Scripts\python.exe scripts\setup_tts.py     type yes to accept her license; --cpu without an NVIDIA GPU
 ```
 
-- First Amika's voice and her Live2D model from the Hugging Face repository
-  [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) (same license for both), file by file
-  with the standard library and checked against `scripts/MekaHime_Amika.manifest.json` (size and SHA-256 of all 250
-  files at the pinned revision): the voice into `vendor/tts-engine/Speakers/MekaHime_Amika/`, the model into
-  `avatar/models/Amika/` (`--skip-avatar` leaves it out). Then it builds the rest of `vendor/tts-engine/` from public
+- First Amika's voice, her Live2D model and the paper doll that stands in for her helpers, from the Hugging Face
+  repository [MekaHime/MekaHime_Amika](https://huggingface.co/MekaHime/MekaHime_Amika) (one license for all three),
+  file by file with the standard library and checked against `scripts/MekaHime_Amika.manifest.json` (size and
+  SHA-256 of all 250 files at the pinned revision, and of the paper doll's 70 at its own): the voice into
+  `vendor/tts-engine/Speakers/MekaHime_Amika/`, the model into `avatar/models/Amika/` (`--skip-avatar` leaves it
+  out), the paper doll into `avatar/models/Host/` (`--skip-paper-doll`). Then it builds the rest of `vendor/tts-engine/` from public
   sources: a Python 3.11 venv with CUDA 12.8 torch, upstream GPT-SoVITS at a pinned commit with its pretrained
   models. Every download is pinned by size and SHA-256; a re-run verifies and skips what is already there, and
   `--verify` checks everything without downloading.

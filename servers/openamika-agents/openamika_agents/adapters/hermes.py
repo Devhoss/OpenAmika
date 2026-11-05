@@ -253,8 +253,8 @@ class HermesAdapter(Adapter):
         reason, got = probe(self.client, f"{self.base}/health")
         if reason != "ok":
             hint = (" — is `hermes gateway` running, with an API_SERVER_KEY of 16 or more characters in its .env? "
-                    "(Without one Hermes runs but never opens this port; its logs\\gateway.log says why)"
-                    if reason in ("unreachable", "timeout") else "")
+                    "(without one Hermes runs but never opens this port, and its logs\\gateway.log has no "
+                    "\"API server listening\" line)" if reason in ("unreachable", "timeout") else "")
             return {"ok": False, "reason": reason, "detail": f"Hermes: {got}{hint}", **base}
         try:
             base["version"] = (got.json() or {}).get("version")

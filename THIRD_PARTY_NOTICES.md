@@ -34,9 +34,12 @@ Model licenses can change; the model card on Hugging Face (or ModelScope) is aut
 
 ## Not included
 
-- Amika's Live2D model and her voice are not in this repository: `scripts/setup_tts.py` downloads them from
-  the Hugging Face repository `MekaHime/MekaHime_Amika` after you accept their license, (c) MekaHime Inc.,
-  personal, non-commercial use only, 18+, no redistribution, no training other models on them. Any other
-  Live2D model: see `avatar/models/README.md`.
+- Amika's Live2D model, her voice and the paper doll that stands in for her helpers are not in this
+  repository: `scripts/setup_tts.py` downloads them from the Hugging Face repository `MekaHime/MekaHime_Amika`
+  after you accept their license, (c) MekaHime Inc., personal, non-commercial use only, 18+, no redistribution,
+  no training other models on them. Any other Live2D model: see `avatar/models/README.md`.
+- Hermes Agent and nanoMuse (task agents) are not part of OpenAmika either: you install them yourself under their
+  own licenses (Hermes Agent: MIT; nanoMuse: GPL-3.0-or-later), and OpenAmika only talks to them over HTTP
+  (`docs/TOOLS.md`).
 - Her voice server's code is in `vendor/tts-engine/` (MIT). Upstream GPT-SoVITS and its pretrained models are
   downloaded by `scripts/setup_tts.py` under their own licenses (`vendor/tts-engine/THIRD_PARTY_NOTICES.md`).

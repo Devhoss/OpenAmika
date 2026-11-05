@@ -54,7 +54,9 @@ of the repository at that revision, 250 files); an interrupted download resumes 
 repository, under the same license, holds **her Live2D model** (`live2d/Amika`), downloaded and checked the same way: the
 script puts it into `avatar/models/Amika/`, where the Use page finds it (`--skip-avatar` leaves it out and the
 stage then says "No Live2D model yet"; `--update-avatar` downloads it again and keeps a `banks.json` you edited in
-Setup, while an unedited one follows a newer pin). After the downloads the script checks that every tag OpenAmika's
+Setup, while an unedited one follows a newer pin), and **the paper doll** that stands in for her helpers
+(`live2d/Host`, pinned at its own revision, `PAPER_DOLL_REV`), which goes to `avatar/models/Host/`
+(`--skip-paper-doll` leaves it out). After the downloads the script checks that every tag OpenAmika's
 voice adapter can send (`V1_IDS` in
 `speech/voice_adapter.py`, 67 tags) has a clip, and whether `settings.json` starts this server with that voice; it
 never edits `settings.json`.
