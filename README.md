@@ -148,15 +148,21 @@ decides whether to help, gives the helper the task after she has answered you, r
 the result in her own words. While a helper is switched on, MekaHime's paper doll stands at the bottom right of her
 stage and plays the helper's side. Each helper runs its own model on OpenRouter, and the key she uses works for it.
 
-**Hermes Agent**, in a new PowerShell window:
+**Hermes Agent**: install it from a PowerShell window. This form of its installer asks no questions; the lines
+after it do the setup OpenAmika needs:
 
 ```powershell
-iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # installs Hermes; then open a new window
-hermes model                                                  # choose OpenRouter, paste your key, pick z-ai/glm-5
-$key = [guid]::NewGuid().ToString('N')                        # a random key for its API server
+& ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive
+```
+
+Then, in a new PowerShell window:
+
+```powershell
+hermes model                                    # choose OpenRouter, paste your key, then "Enter custom model name": z-ai/glm-5
+$key = [guid]::NewGuid().ToString('N')          # a random key for its API server
 hermes config set API_SERVER_ENABLED true
 hermes config set API_SERVER_KEY $key
-$key | Set-Clipboard                                          # copied, for the next step
+hermes gateway stop                             # a Hermes already running reads the key only when it starts again
 ```
 
 **nanoMuse**: clone it into the `Nanomuse` folder, give it a `config.toml` and put your key in its own vault; the
@@ -164,9 +170,15 @@ commands and the file are in [docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse).
 
 **Connect them.** In the OpenAmika folder, run `Copy-Item config\tools.example.json config\tools.json` (only if
 there is no `config\tools.json` yet) and `notepad config\tools.json`. Set `"enabled": true` at the top and in the
-helper's entry; for Hermes, paste the key (Ctrl+V) as `"HERMES_API_KEY"`. Save and start her
-(`.\Start_OpenAmika.bat`): she starts her helpers herself. On the Tools page the helper's card turns green
-(`agent online`).
+helper's entry. For nanoMuse, `"NANOMUSE_LANGUAGE"` is the language it answers in (`"en"`; or `"ja"`, `"zh-CN"`).
+For Hermes, copy its key with this line and paste it (Ctrl+V) as `"HERMES_API_KEY"`:
+
+```powershell
+(Select-String -Path "$env:LOCALAPPDATA\hermes\.env" -Pattern '^API_SERVER_KEY=(.+)').Matches[0].Groups[1].Value | Set-Clipboard
+```
+
+Save and start her (`.\Start_OpenAmika.bat`): she starts her helpers herself. On the Tools page the helper's card
+turns green (`agent online`).
 
 **Meet the paper doll.** Open the Use page: the doll slides onto her stage. Ask her, for example, "Can you have
 Hermes check tomorrow's weather?". She answers, types the task in her speech bubble, and the doll takes over: it

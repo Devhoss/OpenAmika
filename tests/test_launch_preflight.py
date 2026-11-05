@@ -340,6 +340,7 @@ def test_hermes_key_is_checked_in_the_hermes_home_and_never_shown(fresh, monkeyp
     assert got(good, "0123456789abcdef-something-else")["hermes key"][0] == "warn"
     assert "differs" in got(good, "0123456789abcdef-something-else")["hermes key"][1]
     assert "not set yet" in got(good, "PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env")["hermes key"][1]
+    assert "not set yet" in got(good, "<the API_SERVER_KEY from Hermes's .env>")["hermes key"][1]   # a doc's placeholder
     short = got("tooshort", "tooshort")["hermes key"]
     assert short[0] == "warn" and "shorter than 16 characters" in short[1]
     assert got(None, good)["hermes key"][0] == "warn"                   # no key: Hermes never opens its API server

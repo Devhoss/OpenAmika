@@ -104,20 +104,31 @@ envs\brain\Scripts\python.exe scripts\setup_tts.py                   # 她的声
 
 她可以把跑腿的事交给你电脑上的帮手程序——[Hermes Agent](https://hermes-agent.nousresearch.com) 或 [nanoMuse](https://github.com/nano-muse/nanoMuse)：它们会上网搜索、操作浏览器、处理文件。帮不帮由她决定：她先回答你，再把事情交给帮手，替它转达问题，最后用自己的话把结果告诉你。帮手开着的时候，MekaHime 的纸娃娃会站在她舞台的右下角，演帮手那一方。每个帮手都在 OpenRouter 上用自己的模型；她现在用的密钥就可以。
 
-**Hermes Agent**（在一个新的 PowerShell 窗口里）：
+**Hermes Agent**：在 PowerShell 窗口里安装。这种写法的安装程序不会问任何问题，OpenAmika 需要的设置由后面几行完成：
 
 ```powershell
-iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # 安装 Hermes；装好后打开一个新窗口
-hermes model                                                  # 选 OpenRouter，粘贴你的密钥，选 z-ai/glm-5
-$key = [guid]::NewGuid().ToString('N')                        # 给它的 API 服务器生成一个随机密钥
+& ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive
+```
+
+装好后，在一个新的 PowerShell 窗口里：
+
+```powershell
+hermes model                                    # 选 OpenRouter，粘贴你的密钥，再选 “Enter custom model name”，输入 z-ai/glm-5
+$key = [guid]::NewGuid().ToString('N')          # 给它的 API 服务器生成一个随机密钥
 hermes config set API_SERVER_ENABLED true
 hermes config set API_SERVER_KEY $key
-$key | Set-Clipboard                                          # 已复制，下一步要用
+hermes gateway stop                             # 已经在运行的 Hermes 要重新启动后才会读到这个密钥
 ```
 
 **nanoMuse**：把它克隆到 `Nanomuse` 文件夹，给它写一个 `config.toml`，再把密钥存进它自己的保险库（vault）；命令和文件内容见 [docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse)。
 
-**连接。** 在 OpenAmika 文件夹里运行 `Copy-Item config\tools.example.json config\tools.json`（只在还没有 `config\tools.json` 时）和 `notepad config\tools.json`。把最上面和帮手那一项的 `"enabled"` 改成 `true`；如果是 Hermes，再把密钥粘贴（Ctrl+V）到 `"HERMES_API_KEY"`。保存后启动她（`.\Start_OpenAmika.bat`），她会自己启动帮手。Tools 页面上这个帮手的卡片会变成绿色（`agent online`）。
+**连接。** 在 OpenAmika 文件夹里运行 `Copy-Item config\tools.example.json config\tools.json`（只在还没有 `config\tools.json` 时）和 `notepad config\tools.json`。把最上面和帮手那一项的 `"enabled"` 改成 `true`。如果是 nanoMuse，再把 `"NANOMUSE_LANGUAGE"` 改成 `"zh-CN"`（这样它会用中文回复）。如果是 Hermes，用下面这行复制它的密钥，再粘贴（Ctrl+V）到 `"HERMES_API_KEY"`：
+
+```powershell
+(Select-String -Path "$env:LOCALAPPDATA\hermes\.env" -Pattern '^API_SERVER_KEY=(.+)').Matches[0].Groups[1].Value | Set-Clipboard
+```
+
+保存后启动她（`.\Start_OpenAmika.bat`），她会自己启动帮手。Tools 页面上这个帮手的卡片会变成绿色（`agent online`）。
 
 **见见纸娃娃。** 打开 Use 页面，纸娃娃会滑进她的舞台。试着问她，比如“能让 Hermes 查一下明天的天气吗？”。她先回答你，在气泡里打出要交代的事，接下来就轮到纸娃娃了：帮手干活时它在思考，帮手的每一步它都用自己的气泡说出来；帮手有问题要问或需要你同意时，它会露出吃惊的样子（直接说“好”或“不行”，或在 Use 页面点 Approve）；结果到了它会很开心，然后她把结果告诉你。纸娃娃由 `setup_tts.py` 一起安装（汇总里显示 `OK paper doll Host`）。
 

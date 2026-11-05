@@ -430,7 +430,7 @@
       sections: [{ title: "Details", items: [
         "Runs its own model via OpenRouter (HERMES_PROVIDER / HERMES_MODEL in tools.json env); it reports tokens, so the ledger prices it at list price.",
         "Its instructions: report short and factual, in the task's language; ask one clear question if it needs you; never claim what it did not do.",
-        "Setup in docs/TOOLS.md: install.ps1, hermes model, API_SERVER_KEY, then the hermes entry of config/tools.json." ] }] },
+        "Setup in docs/TOOLS.md: install.ps1 -NonInteractive, hermes model (OpenRouter, custom model z-ai/glm-5), API_SERVER_KEY, hermes gateway stop, then the hermes entry of config/tools.json." ] }] },
     { id: "nanomuse", title: "nanoMuse", sub: "nanomuse.exe serve · :8787", icon: "N", layer: "agent", group: "agent process", port: 8787, external: true,
       source: "config/tools.json mcpServers.nanomuse (NANOMUSE_URL http://127.0.0.1:8787 · autostart Nanomuse\\venv\\Scripts\\nanomuse.exe serve --config … · NANOMUSE_TOKEN_FILE) · logs/agent-nanomuse.log",
       summary: "The second helper: web search, a browser, files in its own folder — reached over HTTP with a token file. Same bridge protocol as Hermes; health at /api/health, and /api/settings says whether its model has a key.",

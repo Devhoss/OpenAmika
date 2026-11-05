@@ -104,20 +104,31 @@ OpenAmikaフォルダーの`Start_OpenAmika.bat`をダブルクリックしま�
 
 彼女は、あなたのPCで動くヘルパープログラム、[Hermes Agent](https://hermes-agent.nousresearch.com)や[nanoMuse](https://github.com/nano-muse/nanoMuse)に用事を頼めます。ヘルパーはウェブを検索し、ブラウザーを操作し、ファイルを扱います。手伝うかどうかは彼女が決めます。あなたに返事をしてからヘルパーに用事を渡し、ヘルパーからの質問を伝え、結果を自分の言葉で教えてくれます。ヘルパーがオンの間は、MekaHimeの紙人形が彼女の舞台の右下に立ち、ヘルパーの役を演じます。ヘルパーはそれぞれOpenRouterで自分のモデルを使います。キーは彼女が使っているものをそのまま使えます。
 
-**Hermes Agent**（新しいPowerShellウィンドウで）：
+**Hermes Agent**：PowerShellウィンドウでインストールします。この形のインストーラーは何も質問しません。OpenAmikaに必要な設定は、そのあとの行で行います。
 
 ```powershell
-iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # Hermesをインストール。終わったら新しいウィンドウを開く
-hermes model                                                  # OpenRouterを選び、キーを貼り付けて、z-ai/glm-5を選ぶ
-$key = [guid]::NewGuid().ToString('N')                        # APIサーバー用のランダムなキー
+& ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive
+```
+
+終わったら、新しいPowerShellウィンドウで：
+
+```powershell
+hermes model                                    # OpenRouterを選んでキーを貼り付け、「Enter custom model name」で z-ai/glm-5 と入力
+$key = [guid]::NewGuid().ToString('N')          # APIサーバー用のランダムなキー
 hermes config set API_SERVER_ENABLED true
 hermes config set API_SERVER_KEY $key
-$key | Set-Clipboard                                          # 次の手順のためにコピー
+hermes gateway stop                             # すでに動いているHermesは、次に起動したときにキーを読み込む
 ```
 
 **nanoMuse**：`Nanomuse`フォルダーにクローンし、`config.toml`を用意して、キーをnanoMuse自身の保管庫（vault）に入れます。コマンドとファイルの中身は[docs/TOOLS.md](docs/TOOLS.md#set-up-nanomuse)にあります。
 
-**つなぐ。** OpenAmikaフォルダーで`Copy-Item config\tools.example.json config\tools.json`（`config\tools.json`がまだないときだけ）と`notepad config\tools.json`を実行します。先頭とヘルパーの項目の`"enabled"`を`true`にし、Hermesの場合はキーを`"HERMES_API_KEY"`に貼り付けます（Ctrl+V）。保存して彼女を起動すると（`.\Start_OpenAmika.bat`）、ヘルパーは彼女が自分で起動します。Toolsページのヘルパーのカードが緑（`agent online`）になります。
+**つなぐ。** OpenAmikaフォルダーで`Copy-Item config\tools.example.json config\tools.json`（`config\tools.json`がまだないときだけ）と`notepad config\tools.json`を実行します。先頭とヘルパーの項目の`"enabled"`を`true`にします。nanoMuseの場合は`"NANOMUSE_LANGUAGE"`も`"ja"`にします（ヘルパーが日本語で返事をします）。Hermesの場合は、次の行でキーをコピーして、`"HERMES_API_KEY"`に貼り付けます（Ctrl+V）：
+
+```powershell
+(Select-String -Path "$env:LOCALAPPDATA\hermes\.env" -Pattern '^API_SERVER_KEY=(.+)').Matches[0].Groups[1].Value | Set-Clipboard
+```
+
+保存して彼女を起動すると（`.\Start_OpenAmika.bat`）、ヘルパーは彼女が自分で起動します。Toolsページのヘルパーのカードが緑（`agent online`）になります。
 
 **紙人形に会う。** Useページを開くと、紙人形が彼女の舞台にすっと入ってきます。たとえば「Hermesに明日の天気を調べてもらえる？」と頼んでみてください。彼女が返事をして、吹き出しに用事を打ち込むと、そこから紙人形の出番です。ヘルパーが作業している間は考え込み、ヘルパーの進み具合を自分の吹き出しで話し、ヘルパーから質問があるときやあなたの許可が必要なときは驚いた顔をします（声で「いいよ」「だめ」と答えるか、UseページのApproveをクリック）。結果が届くと喜び、その結果を彼女が教えてくれます。紙人形は`setup_tts.py`で一緒に入ります（まとめに`OK paper doll Host`）。
 

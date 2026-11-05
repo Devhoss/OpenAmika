@@ -979,7 +979,7 @@ def hermes_checks(scfg, agent):
                                        f'a placeholder, so Hermes never opens its API server and she cannot reach it — '
                                        f'set a long random key there and the same one as HERMES_API_KEY in '
                                        f'config/tools.json (docs/TOOLS.md, "Set up Hermes Agent")')]
-    if not ours or ours.upper().startswith('PASTE'):
+    if not ours or ours.upper().startswith('PASTE') or (ours.startswith('<') and ours.endswith('>')):   # a placeholder
         return [('warn', 'hermes key', f'HERMES_API_KEY in config/tools.json is not set yet: put the API_SERVER_KEY from '
                                        f'{where} there — Hermes rejects her without it')]
     if key != ours:

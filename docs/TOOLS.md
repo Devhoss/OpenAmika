@@ -38,20 +38,23 @@ through her, and the Use page draws the exchange on her stage.
 ### Set up Hermes Agent
 
 [Hermes Agent](https://hermes-agent.nousresearch.com) (Nous Research) is a general computer-using agent: web
-research, a browser, a terminal, files. Tested with Hermes Agent 0.22.4.
+research, a browser, a terminal, files. Tested with Hermes Agent 0.22.4 and 0.22.7.
 
 1. **Install it** from a normal PowerShell window (not as administrator):
 
    ```powershell
-   iex (irm https://hermes-agent.nousresearch.com/install.ps1)
+   & ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive
    ```
 
    It installs into `%LOCALAPPDATA%\hermes` (its code, its own Python, Node and a browser it drives, Chrome for
-   Testing) and puts the `hermes` command on your PATH. Open a new PowerShell window afterwards. If it offers its
-   setup wizard you may skip it: the next steps cover what OpenAmika needs. If your antivirus quarantines
-   `uv.exe`, see the troubleshooting part of Hermes's README.
-2. **Give it a model:** run `hermes model`, choose OpenRouter, paste your OpenRouter key and pick `z-ai/glm-5`
-   (the model OpenAmika was tested with).
+   Testing) and puts the `hermes` command on your PATH. Open a new PowerShell window afterwards. `-NonInteractive`
+   skips the two parts of the installer that ask questions: its setup wizard (the next steps cover what OpenAmika
+   needs) and its gateway service. Installing with Hermes's own one-liner, `iex (irm …/install.ps1)`, instead? Then
+   answer **n** when it asks "Start the gateway now after install?": a gateway started now has no API server yet,
+   and OpenAmika starts it later, with its key. "Start the gateway automatically on Windows login" is up to you. If
+   your antivirus quarantines `uv.exe`, see the troubleshooting part of Hermes's README.
+2. **Give it a model:** run `hermes model`, choose OpenRouter and paste your OpenRouter key. The model OpenAmika
+   was tested with, `z-ai/glm-5`, is not in its list: choose **Enter custom model name** and type `z-ai/glm-5`.
 3. **Turn on its API server, with a key.** OpenAmika reaches Hermes through it, and it opens only with a key of
    16 characters or more (with a shorter one, or a placeholder, Hermes runs without it and says nothing about it):
 
@@ -59,19 +62,22 @@ research, a browser, a terminal, files. Tested with Hermes Agent 0.22.4.
    $key = [guid]::NewGuid().ToString('N')       # 32 random characters
    hermes config set API_SERVER_ENABLED true
    hermes config set API_SERVER_KEY $key
-   $key | Set-Clipboard                          # you paste it into OpenAmika in step 5
+   hermes gateway stop                           # a Hermes already running reads the key only when it starts again
    ```
 
-   Both lines go into `%LOCALAPPDATA%\hermes\.env`. You can also add `API_SERVER_ENABLED=true` and
-   `API_SERVER_KEY=<your key>` to that file in Notepad.
+   Both settings go into `%LOCALAPPDATA%\hermes\.env`. You can also add `API_SERVER_ENABLED=true` and
+   `API_SERVER_KEY=<your key>` to that file in Notepad. Hermes reads that file only when it starts: the last line
+   stops a gateway that was already running without the key (one the installer started, or your own), and OpenAmika
+   starts it again with it. With none running it says `No gateway running for this profile`, which is fine.
 4. **Optional, to watch it work** in a visible browser window: `hermes config set browser.headed true` and
    `hermes config set AGENT_BROWSER_HEADED true` (on Windows Hermes keeps its browser hidden without the second).
    To try it by hand: `hermes gateway` in one window, then `Invoke-RestMethod http://127.0.0.1:8642/health` in
    another shows status `ok`. Stop it with Ctrl+C: OpenAmika starts it from now on.
 5. **Connect it** (see *Connect them to OpenAmika* below): in `config\tools.json` set the top-level `"enabled"`
-   and the `hermes` entry's `"enabled"` to `true`, and paste the key from step 3 as `"HERMES_API_KEY"`. Its
-   `"autostart"` already points at `%LOCALAPPDATA%\hermes\bin\hermes.exe gateway`. Keep `HERMES_PROVIDER` and
-   `HERMES_MODEL` equal to what you chose in step 2: they only price her cost estimate.
+   and the `hermes` entry's `"enabled"` to `true`, and paste the key from step 3 as `"HERMES_API_KEY"` (*Connect
+   them* has a line that copies it). Its `"autostart"` already points at `%LOCALAPPDATA%\hermes\bin\hermes.exe
+   gateway`. Keep `HERMES_PROVIDER` and `HERMES_MODEL` equal to what you chose in step 2: they only price her cost
+   estimate.
 
 ### Set up nanoMuse
 
@@ -135,7 +141,7 @@ Nanomuse\venv\Scripts\nanomuse vault set OPENROUTER_API_KEY --config Nanomuse\da
 
 Paste the key at the hidden prompt. A yellow "No model yet" line before it is expected (the vault is still empty
 at that moment). Do not use `api_key = "${OPENROUTER_API_KEY}"` instead: the launcher starts nanoMuse before the
-brain and never reads `brain\.env`, so nanoMuse would start without a key.
+brain and never passes `brain\.env` on to it, so nanoMuse would start without a key.
 
 To try it by hand: `Nanomuse\venv\Scripts\nanomuse serve --config Nanomuse\data\config.toml --no-qr --host
 127.0.0.1 --port 8787` prints `nanoMuse … is ready.` and writes `Nanomuse\data\server_token` on its first start;
@@ -164,7 +170,7 @@ The example's `hermes` and `nanomuse` entries are complete; you only change what
     "hermes": {
       "command": "python", "args": ["-m", "openamika_agents", "hermes"], "cwd": "../servers/openamika-agents",
       "autostart": {"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"},
-      "env": {"HERMES_URL": "http://127.0.0.1:8642", "HERMES_API_KEY": "<the API_SERVER_KEY from Hermes's .env>", "…": "…"},
+      "env": {"HERMES_URL": "http://127.0.0.1:8642", "HERMES_API_KEY": "PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env", "…": "…"},
       "enabled": true, "kind": "agent", "persona_note": "…"
     },
     "nanomuse": {"…": "…", "enabled": true}
@@ -172,11 +178,21 @@ The example's `hermes` and `nanomuse` entries are complete; you only change what
 }
 ```
 
+For Hermes, replace `PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env` with its key. This line copies it from Hermes's
+`.env`; run it right before you paste (Ctrl+V), since setting up nanoMuse may have put your OpenRouter key on the
+clipboard in between:
+
+```powershell
+(Select-String -Path "$env:LOCALAPPDATA\hermes\.env" -Pattern '^API_SERVER_KEY=(.+)').Matches[0].Groups[1].Value | Set-Clipboard
+```
+
+(Or open `%LOCALAPPDATA%\hermes\.env` in Notepad and copy what follows `API_SERVER_KEY=`.)
+
 - `command: "python"` is the brain's own interpreter; the bridge runs from `servers/openamika-agents` and needs
   nothing installed (no `pip install`).
 - `autostart` is the helper's own start command: the launcher starts it before her brain (its output goes to
-  `logs\agent-<name>.log`), and the brain starts it again whenever it finds it down. `%VARIABLES%` work in it,
-  and a relative path is taken from the OpenAmika folder.
+  `logs\agent-<name>.log`), and the brain starts it again whenever it finds it down. `%VARIABLES%` work in its
+  command, args and cwd, and a relative command or cwd is taken from the OpenAmika folder.
 - `kind: "agent"` is what makes it a helper (and what seats the paper doll). `persona_note` is what she is told
   about it, in character; `{user_name}` becomes your name.
 - Already have a `config\tools.json` (for the smart home, say)? Copy only the two entries into its
@@ -186,10 +202,11 @@ The example's `hermes` and `nanomuse` entries are complete; you only change what
 
 Then start her: `.\Start_OpenAmika.bat`. If she is already running, saving is enough: the brain reads the file
 within 30 seconds and starts the helper itself. On the Tools page, **Tools enabled** and the helper's card switch
-must both be on; the card turns green, `agent online · v0.22.4` (nanoMuse: `v1.0.9`), and **Test** says
-`hermes: 5 tool(s) discovered (agent bridge) · agent online v0.22.4.`. `envs\brain\Scripts\python.exe launch.py
---check` shows `OK agent hermes  online at http://127.0.0.1:8642`, `OK hermes key  HERMES_API_KEY is the
-API_SERVER_KEY in …` and `OK paper doll  Host · 64 motions — stands in for her helpers on the Use page`.
+must both be on; the card turns green with the helper's version, for example `agent online · v0.22.7` (nanoMuse:
+`v1.0.9`), and **Test** says `hermes: 5 tool(s) discovered (agent bridge) · agent online v0.22.7.`.
+`envs\brain\Scripts\python.exe launch.py --check` shows `OK agent hermes  online at http://127.0.0.1:8642`,
+`OK hermes key  HERMES_API_KEY is the API_SERVER_KEY in …` and `OK paper doll  Host · 64 motions — stands in for
+her helpers on the Use page`.
 
 ### Meet the paper doll
 
@@ -227,13 +244,17 @@ Before a risky step a helper asks (Hermes by its approval policy, `approvals.mod
 by its Sentinel: a shell command always asks, and on Windows so does every Python script). She relays the request.
 Say yes or no out loud (your own words are quote-checked; she cannot approve anything herself), or click
 **Approve** / **Deny** on the Use page's **Her helpers** card, which also has **Answer** for a question and
-**Stop** for a job. A request nobody answers is stopped after 30 minutes.
+**Stop** for a job. An approval nobody answers ends the job when its 15-minute limit runs out (nanoMuse itself
+denies it after 10 minutes, its `approval_timeout`); a question still open after the helper's run has ended is
+dropped after 30 minutes.
 
 ### Stopping
 
-`Stop_OpenAmika.bat` (or Ctrl+C in her console) stops the helpers the launcher started. A helper the brain started
-again later keeps running, on purpose (it was started detached, so it survives a brain restart): close it with
-`hermes gateway stop`, or end `hermes.exe` / `nanomuse.exe` in Task Manager.
+`Stop_OpenAmika.bat` (or Ctrl+C in her console) stops her helpers too: the ones the launcher started, and the ones
+the brain started again while it ran. Only a helper the brain started before the brain itself was restarted keeps
+running (it was started detached, so it survives a brain restart), and so does a Hermes that was already running
+before OpenAmika started (she uses it as it is): close it with `hermes gateway stop`, or end `hermes.exe` /
+`nanomuse.exe` in Task Manager.
 
 ### When it does not work
 
@@ -246,6 +267,7 @@ below are what they say.
 | `Hermes is running but rejects the API key (HERMES_API_KEY in config/tools.json must equal API_SERVER_KEY …)`, or `-- hermes key  tools.json HERMES_API_KEY differs from API_SERVER_KEY in …` | the two keys differ | paste the `API_SERVER_KEY` from `%LOCALAPPDATA%\hermes\.env` into `HERMES_API_KEY` |
 | `-- hermes key  HERMES_API_KEY in config/tools.json is not set yet …` | the example's placeholder is still there | paste the key |
 | `!! agent hermes  not running, and its start command does not exist: …` (or `agent nanomuse`) | not installed where `autostart` says | install it, or fix `autostart` in `config\tools.json` |
+| `start failed`: `… exited with code 0` (or `1`) `— see logs/agent-hermes.log`, and that log says `The host gateway already serves profile 'default' — nothing to start` or `A gateway is already running` | a Hermes gateway was already running without its API server (started before step 3, for one by the installer's "Start the gateway now after install?"), so the one OpenAmika starts leaves at once | `hermes gateway stop`, then **Start** on the card (or start her again) |
 | `start failed`: `… exited with code N — see logs/agent-hermes.log` | it started and stopped | read `logs\agent-<name>.log` (and Hermes's `logs\gateway.log` / `errors.log`) |
 | card green, but every task fails and she says Hermes could not do it | Hermes has no working model | run `hermes model` again, then `hermes doctor` |
 | `agent refusing tasks`: `Hermes … is running but refused the last task (Hermes refused POST /v1/runs: HTTP 429 …)` | busy, shutting down, or the session belongs to another client | wait; a task it takes clears it (or 10 minutes) |
@@ -260,8 +282,9 @@ below are what they say.
 | no browser window | the helper's browser runs hidden | Hermes: step 4; nanoMuse: `[browser] headless = false` |
 | `-- paper doll  a task agent is switched on, but avatar/models/ has no paper doll …` | the doll is not installed | `envs\brain\Scripts\python.exe scripts\setup_tts.py` |
 | `-- paper doll Host  not downloaded: this OpenAmika does not pin the revision …` (setup summary) | this version of OpenAmika cannot download the doll yet | update OpenAmika (`git pull`) and run the setup again later |
+| `-- paper doll Host  not copied: … has no live2d/Host/ …` (setup with `--from-dir`) | that copy of her files was made before the doll was added; her voice and model are installed all the same | run the setup without `--from-dir` once (it downloads the doll once this OpenAmika pins its revision), or from a newer copy |
 | no doll on her stage although `OK paper doll` | **Tools enabled** or the helper's switch is off, or her own model is missing (the doll is seated beside her) | switch them on; reload the Use page |
-| a helper still running after `Stop_OpenAmika` | the brain started it again, detached | `hermes gateway stop`, or Task Manager |
+| a helper still running after `Stop_OpenAmika` | the brain started it before the brain itself was restarted (detached), or it was running before OpenAmika started | `hermes gateway stop`, or Task Manager |
 
 ## She decides, the clerk transcribes
 
@@ -379,8 +402,9 @@ helper is "still on it".
 
 **Starting the agents for you.** An agent entry may carry `autostart`, its own start command (a
 string, quotes around a path with spaces, or `{command, args, cwd, env}`; the Tools page has a *Start
-command* field on every agent card in Professional mode). `%VARIABLES%` in it are expanded and a
-relative path is taken from the OpenAmika folder, by the launcher and the brain alike. The launcher starts
+command* field on every agent card in Professional mode). `%VARIABLES%` in its command, args and cwd are
+expanded, and a relative command or cwd is taken from the OpenAmika folder, by the launcher and the brain
+alike. The launcher starts
 it before her brain and waits for its health URL (`HERMES_URL/health`, `NANOMUSE_URL/api/health`). When a
 probe finds the agent unreachable, the brain launches that command detached from itself (so it survives a
 brain restart), the card shows *agent starting…* for up to 90 s, and the clerk waits a moment for a
@@ -413,9 +437,12 @@ The same exchange plays out on her stage. A second Live2D model marked `role: "a
 order. It is seated bottom-right whenever the tool layer is on and an agent server is enabled (healthy or
 not), and slides away when none is. Each new line of the tool dialogue becomes a speech bubble: hers out of
 her, the helper's out of the doll, and the two turn to look at each other while a bubble is up. The
+bridge's own steps (`sent`, `started`, `stop requested`, `approval granted`…, marked `internal`) stay in the
+transcript only: the doll says what the helper itself said or did. The
 doll plays motions by state (table in *Meet the paper doll*): `talk*` while it has the word, `listen*`
 while she talks to it, `think*` while a job is running, `happy*` on a result, `worried*` on an error or a
-stop, `surprise*` when it has a question for you. The paper doll's set is retargeted from her own
+stop, `surprise*` when it has a question for you, `idle*` otherwise. Only its own state loop picks them: the
+Live2D library's random idle motions are switched off on the doll. The paper doll's set is retargeted from her own
 recordings with `avatar/retarget_motions.py --preset agent`. Lines that were already in the log when the
 page opened do not get a bubble; the transcript keeps everything. You can drag or zoom the doll like
 her; "Re-center" resets both.

@@ -27,7 +27,7 @@ complete; or on the Tools page, Professional mode → Raw config):
   "command": "python", "args": ["-m", "openamika_agents", "hermes"],
   "cwd": "../servers/openamika-agents",
   "autostart": {"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"},
-  "env": {"HERMES_URL": "http://127.0.0.1:8642", "HERMES_API_KEY": "<the API_SERVER_KEY from Hermes's .env>",
+  "env": {"HERMES_URL": "http://127.0.0.1:8642", "HERMES_API_KEY": "PASTE-THE-API_SERVER_KEY-FROM-HERMES-.env",
           "HERMES_SESSION": "openamika", "HERMES_PROVIDER": "openrouter", "HERMES_MODEL": "z-ai/glm-5",
           "HERMES_INSTRUCTIONS": "You are working for Amika, an AI companion, on behalf of her user …"},
   "enabled": true, "kind": "agent",
@@ -41,8 +41,8 @@ agent, in character (Chinese like the rest of her prompts); `{user_name}` is rep
 
 `autostart` (an object as above, or one command line with quotes around a path that has spaces) is the
 agent's own start command: the launcher starts it before her brain, and the brain starts it again when it
-is not running (`docs/TOOLS.md`, *Starting the agents for you*). `%VARIABLES%` in it are expanded, and a
-relative path is taken from the OpenAmika folder.
+is not running (`docs/TOOLS.md`, *Starting the agents for you*). `%VARIABLES%` in its command, args and cwd
+are expanded, and a relative command or cwd is taken from the OpenAmika folder.
 
 Environment variables per agent:
 
@@ -68,7 +68,8 @@ Environment variables per agent:
 2. The bridge starts the task in the agent and returns a job id at once. The brain polls `status`
    every few seconds: progress steps go to the UI (her bubble and the paper doll's on the Use page),
    questions and approval requests are relayed through her, and the final report is spoken by her in
-   her own words.
+   her own words. Steps the bridge makes itself (`sent`, `started`, `stop requested`, `approval granted`…)
+   carry `"internal": true`: the Use page keeps them in the tool dialogue but not on the doll.
 3. If the agent asks something or wants an approval, your answer in conversation (or a click on the
    Use page's **Her helpers** card) goes back through `answer`. `stop` cancels a run.
 4. `health` probes the agent itself: Hermes `GET /health` (no auth) then `GET /health/detailed` with
@@ -79,7 +80,8 @@ Environment variables per agent:
    agent that is not ok shows red on the Tools page and she is told not to promise it anything.
 5. A job ends `done` with the agent's report, `failed` with its error (Hermes's `run.failed`, nanoMuse's error
    notice such as "The model provider refused the API key", a refused run, 15 minutes without an end) or
-   `stopped`.
+   `stopped`. nanoMuse's error notice is said once, as the failure; when nanoMuse goes on after it, it is a
+   passing progress step instead.
 
 Run the bridge by hand to poke at it:
 

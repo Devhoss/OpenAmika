@@ -349,8 +349,10 @@ Done. Next:  .\Start_OpenAmika.bat   (or double-click it: her voice server start
   `-- paper doll Host  not downloaded: this OpenAmika does not pin the revision of MekaHime/MekaHime_Amika that adds
   live2d/Host/ yet (PAPER_DOLL_REV in scripts/setup_tts.py is empty). …`; a doll already in place is still checked
   against the pins (`OK … existing; 70 files verified against the pinned list`), and `--from-dir <copy>` installs
-  it from a local copy laid out like the repository. Never fill that constant in yourself: it is the commit of
-  MekaHime's own upload (§11).
+  it from a local copy laid out like the repository. A copy without `live2d/Host/` (any copy at `VOICE_REV`) still
+  installs her voice and model: the doll's row is `-- paper doll Host  not copied: <copy> has no live2d/Host/ …` and
+  the run exits 0 (a doll already in place is checked, never touched). Never fill that constant in yourself: it is
+  the commit of MekaHime's own upload (§11).
 - While `MekaHime/MekaHime_Amika` is private: `$env:HF_TOKEN = "hf_..."` in the same PowerShell window first. Without
   it the rows read `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is
   not public yet. …`. A refusal or a network failure is also printed the moment it happens (`[setup] !! her voice: …`),
@@ -647,23 +649,33 @@ never echo it, never pass a literal key on a command line, never print `config/t
 back. Rule 2's spirit covers approvals: only the person answers a helper's approval or question (their spoken yes,
 quote-checked, or the Use page's buttons); never call `POST /api/build_f/tools/approve` or `/job` for them.
 
-**Hermes Agent** (tested: 0.22.4, stable channel; Windows, a normal PowerShell window):
+**Hermes Agent** (tested: 0.22.4 and 0.22.7, stable channel; Windows, a normal PowerShell window):
 
 ```powershell
-iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # HERMES_HOME = %LOCALAPPDATA%\hermes; hermes on the user PATH
+& ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive   # HERMES_HOME = %LOCALAPPDATA%\hermes; hermes on the user PATH
 # a new window, then:
-hermes model                                                  # interactive: OpenRouter, the person's key, z-ai/glm-5
+hermes model                                                  # interactive: OpenRouter, the person's key, "Enter custom model name": z-ai/glm-5
 $key = [guid]::NewGuid().ToString('N')                        # 32 hex characters
 hermes config set API_SERVER_ENABLED true                     # both go to %LOCALAPPDATA%\hermes\.env
 hermes config set API_SERVER_KEY $key
+hermes gateway stop                                           # a gateway already running read .env without the key; "No gateway running for this profile" is fine
 hermes config set browser.headed true                         # optional: a visible browser (config.yaml)
 hermes config set AGENT_BROWSER_HEADED true                   # optional, needed on Windows for that (.env)
 ```
 
-- Hermes 0.22.4 opens its API server (`127.0.0.1:8642`; `API_SERVER_HOST`, `API_SERVER_PORT`) when
-  `API_SERVER_KEY` is usable: 16 characters or more and not a placeholder (`hermes_cli.auth.has_usable_secret`,
-  min_length 16). Otherwise the gateway runs without it and logs nothing about it. Every route but `GET /health`
-  needs `Authorization: Bearer <API_SERVER_KEY>`; a wrong one gets 401 `Invalid gateway API key (API_SERVER_KEY)`.
+- `-NonInteractive` is the installer's own switch (`iex (irm …)` cannot pass it, hence the scriptblock form, which
+  the installer supports). It skips the installer's two interactive stages, `hermes setup` and `hermes gateway
+  install --if-missing`. Run as `iex (irm …)`, the latter asks "Start the gateway now after install?" and "Start the
+  gateway automatically on Windows login with a Scheduled Task?", both default yes (`HERMES_GATEWAY_INSTALL_START_NOW`
+  / `HERMES_GATEWAY_INSTALL_START_ON_LOGIN` = `0`/`1` preset them). A gateway started then has no API server (no
+  key yet), and a running gateway reads `.env` only at its start; the one OpenAmika launches finds it and leaves at
+  once, so the card ends `start failed` (see §9). The `hermes gateway stop` line above covers that case.
+- `z-ai/glm-5` is not in `hermes model`'s OpenRouter list (0.22.4 and 0.22.7 list `z-ai/glm-5.2` and the `5.3`
+  family): the person picks **Enter custom model name** and types `z-ai/glm-5`, so that it matches `HERMES_MODEL`.
+- Hermes opens its API server (`127.0.0.1:8642`; `API_SERVER_HOST`, `API_SERVER_PORT`) when `API_SERVER_KEY` is
+  usable: 16 characters or more and not a placeholder (`hermes_cli.auth.has_usable_secret`, min_length 16).
+  Otherwise the gateway runs without it and logs nothing about it. Every route but `GET /health` needs
+  `Authorization: Bearer <API_SERVER_KEY>`; a wrong one gets 401 `Invalid gateway API key (API_SERVER_KEY)`.
 - Check by hand: `hermes gateway` (foreground), then `Invoke-RestMethod http://127.0.0.1:8642/health` → status `ok`,
   and Hermes's `%LOCALAPPDATA%\hermes\logs\gateway.log` has `[Api_Server] API server listening on
   http://127.0.0.1:8642 (model: hermes-agent)`. Ctrl+C; OpenAmika starts it from then on. Diagnostics: `hermes doctor`.
@@ -689,8 +701,9 @@ Nanomuse\venv\Scripts\nanomuse vault set OPENROUTER_API_KEY --config Nanomuse\da
   per-run instructions for nanoMuse); `[sandbox] mode = "off"`; `[browser] enabled = true`, `headless = false`;
   `[cloud] required = false`, `sync = false`, `models = false`; `[hub] enabled = false`; `[server] host =
   "127.0.0.1"`, `port = 8787`, `approval_timeout = 600`. The full file is in docs/TOOLS.md.
-- Not `api_key = "${OPENROUTER_API_KEY}"`: `launch.py` starts nanoMuse before the brain and never loads
-  `brain/.env`, so nanoMuse would start with no key ("No model yet"), answer every route, and fail every task.
+- Not `api_key = "${OPENROUTER_API_KEY}"`: `launch.py` starts nanoMuse before the brain and never passes
+  `brain/.env` on to it (it reads that file only for its own key check), so nanoMuse would start with no key ("No
+  model yet"), answer every route, and fail every task.
   `vault set --value` exists but puts the key on a command line: do not use it.
 - Check by hand: `Nanomuse\venv\Scripts\nanomuse serve --config Nanomuse\data\config.toml --no-qr --host 127.0.0.1
   --port 8787` → `nanoMuse … is ready.`, and `Nanomuse\data\server_token` exists (written on the first start; the
@@ -706,7 +719,7 @@ file; the brain re-reads it within 30 s, a Tools-page save at once; the launcher
 | `enabled` (top level) | `true` | the master switch, "Tools enabled" on the Tools page |
 | `mcpServers.<name>.command` / `args` / `cwd` | `python` / `["-m", "openamika_agents", "hermes"]` (or `"nanomuse"`) / `../servers/openamika-agents` | the bridge: `python` = the brain's interpreter, `cwd` relative to `brain/`; nothing to `pip install` |
 | `….enabled`, `….kind` | `true`, `"agent"` | the card's switch; `kind: agent` makes it a helper and seats the paper doll |
-| `….autostart` (hermes) | `{"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"}` | the helper's own start command; `%VARIABLES%` are expanded, a relative path is taken from the OpenAmika folder (launcher and brain alike); a string with quotes around a spaced path works too |
+| `….autostart` (hermes) | `{"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"}` | the helper's own start command; `%VARIABLES%` are expanded in `command`, `args` and `cwd`, and a relative `command` or `cwd` is taken from the OpenAmika folder (launcher and brain alike; `env` values are passed as written); a string with quotes around a spaced path works too |
 | `….autostart` (nanomuse) | `{"command": "C:/OpenAmika/Nanomuse/venv/Scripts/nanomuse.exe", "args": ["serve", "--config", "C:/OpenAmika/Nanomuse/data/config.toml", "--no-qr", "--host", "127.0.0.1", "--port", "8787"], "cwd": "C:/OpenAmika/Nanomuse/data", "env": {"PYTHONUTF8": "1"}}` | change `C:/OpenAmika` when the folder is elsewhere |
 | `env.HERMES_URL`, `env.HERMES_API_KEY` | `http://127.0.0.1:8642`, = `API_SERVER_KEY` | the key is sent as a bearer on every call |
 | `env.HERMES_SESSION` | `openamika` | one continuing conversation; a session a copied Hermes home refuses (409 `profile_mismatch`) is replaced once by `openamika-<pc>` |
@@ -718,11 +731,14 @@ file; the brain re-reads it within 30 s, a Tools-page save at once; the launcher
 
 **What runs.** `launch.py` starts each enabled agent's `autostart` with the services (hidden, output to
 `logs/agent-<name>.log`, health-gated up to 90 s on `HERMES_URL/health` or `NANOMUSE_URL/api/health`, recorded in
-`logs/instance.json` so `Stop_OpenAmika` stops it; one already running is used as is). The brain spawns one bridge
-per enabled agent over stdio, probes its `health` every 30 s and before every `ask`, relaunches a helper that is
-down (detached, so it outlives the brain; 90 s grace, at least 120 s apart, at most 3 tries until the Tools page's
-**Start**), and polls jobs every 2.5 s. A job ends after 900 s at most (`--timeout N` in the entry's `args`); an
-approval or question nobody answers is stopped after 30 minutes.
+`logs/instance.json` so `Stop_OpenAmika` stops it; one already running is used as is and left running). The brain
+spawns one bridge per enabled agent over stdio, probes its `health` every 30 s and before every `ask`, relaunches a
+helper that is down (detached, so it outlives a brain restart; 90 s grace, at least 120 s apart, at most 3 tries
+until the Tools page's **Start**), and polls jobs every 2.5 s. `Stop_OpenAmika` and Ctrl+C kill the brain's process
+tree, which includes a helper that brain relaunched; only one relaunched before a brain restart survives them. A job
+ends after 900 s at most (`--timeout N` in the entry's `args`), an unanswered approval included (nanoMuse itself
+denies one after its `approval_timeout`, 600 s in the tutorial's `config.toml`); a question still open after the
+helper's run ended (Hermes's final clarify) is dropped after 30 minutes.
 
 **Verify** (read, never print keys):
 - `envs\brain\Scripts\python.exe launch.py --check`: `OK agent hermes  online at http://127.0.0.1:8642` (or `--
@@ -738,11 +754,16 @@ approval or question nobody answers is stopped after 30 minutes.
 **The paper doll on the Use page** (`ui/use.js` polls `/api/build_f/tools` every 2 s while connected, 10 s
 otherwise; `ui/live2d-engine.js` draws it): seated bottom-right when the top-level `enabled` is true and any
 enabled server is `kind: agent` (healthy or not), after her own model has loaded; gone when none is. Its base motion
-is `think*` while any job is not finished, else `idle*`. Each new line of the tool dialogue becomes a bubble: hers
+is `think*` while any job is not finished, else `idle*`; its own 250 ms state loop alone picks its motions (the
+gateway puts every loose motion of a model3.json without `Motions` into one `Idle` group, so `loadAgent` points the
+library's idle group, `motionManager.groups.idle`, at a group that does not exist: the library never starts a random
+one on the doll). Each new line of the tool dialogue becomes a bubble: hers
 (who `amika`: the command she typed, her answers) out of her while the doll plays `listen*`; the helper's (who
 `agent`) out of the doll with `talk*`, or the line's mood: `happy*` on a result, `worried*` on an error or a stop,
-`surprise*` on a question or an approval. Without a `role: agent` model there is no doll and no helper bubbles; the
-**Her helpers** card and (Professional) the **Tool dialogue** card still show everything.
+`surprise*` on a question or an approval. A line marked `"internal": true` (a step of the bridge's own: `sent`,
+`started`, `continuing`, `stop requested`, `approval granted`, a session note) gets no bubble. Without a `role:
+agent` model there is no doll and no helper bubbles; the **Her helpers** card and (Professional) the **Tool
+dialogue** card still show everything.
 
 ## 9. Troubleshooting
 
@@ -861,6 +882,11 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
 - Card `agent starting…` (`starting <name> (Ns): <command>`) → wait, up to 90 s. Card `start failed`: `could not start
   <name>: FileNotFoundError …`, `<command> exited with code N — see logs/agent-<name>.log`, or `<name> did not come up
   after 3 start attempts (…) — see logs/agent-<name>.log; press Start to try again` → read that log.
+- Hermes `… exited with code 0` with `The host gateway already serves profile 'default' — nothing to start` in
+  `logs/agent-hermes.log` (0.22.4), or `exited with code 1` with `A gateway is already running` (0.22.7), while
+  nothing answers on 8642 and `launch.py --check` says `OK hermes key` → a gateway started before `API_SERVER_KEY`
+  was set (the interactive installer's "Start the gateway now?", or the person's own) is still running without its
+  API server: `hermes gateway stop`, then **Start** on the card.
 - Card `agent refusing tasks`: `Hermes <v> is running but refused the last task (Hermes refused POST /v1/runs: HTTP
   429|409|503 …); check the Hermes gateway and HERMES_SESSION — a task it accepts clears this` → wait (it also clears
   after 10 minutes). A card note `Hermes refused the configured session 'openamika' (profile_mismatch: it was created
@@ -877,7 +903,9 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
   with its reason.
 - `-- paper doll  a task agent is switched on, but avatar/models/ has no paper doll (…)` → `setup_tts.py` installs it
   (§5.3). `-- paper doll Host  not downloaded: this OpenAmika does not pin the revision …` (setup summary) → expected
-  until `PAPER_DOLL_REV` is set by MekaHime's release; update OpenAmika later. `OK paper doll` but no doll on stage →
+  until `PAPER_DOLL_REV` is set by MekaHime's release; update OpenAmika later. `-- paper doll Host  not copied: <folder>
+  has no live2d/Host/ …` (with `--from-dir`) → that copy predates the doll; her voice and model installed anyway
+  (exit 0). `OK paper doll` but no doll on stage →
   the top-level `enabled` or the helper's `enabled` is false, or her own model did not load (the doll is seated
   after it).
 
@@ -899,16 +927,20 @@ envs\brain\Scripts\python.exe -m pip install -r requirements-dev.txt
 envs\brain\Scripts\python.exe -B -m pytest tests -k "not live" -p no:cacheprovider -q
 ```
 
-About 480 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
-ledger, the control proxies, the tools clerk (with agent autostart and health), the agents bridge against in-process
+About 490 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
+ledger, the control proxies, Fully Local (every role, her surface turn included, on the Ollama transport), the tools
+clerk (with agent autostart and health), the agents bridge against in-process
 fakes of Hermes and nanoMuse (`tests/test_agents_bridge.py`: jobs, approvals, questions, stop, health with
-`no_model` and `refused`, the copied-home session fallback, a real MCP stdio round trip), the IoT safety statement,
+`no_model` and `refused`, the copied-home session fallback, the bridge's own steps marked `internal`, a real MCP
+stdio round trip), the paper doll on the Use page (by source: only its state loop picks its motions, no bubble for
+the bridge's own steps), the IoT safety statement,
 the launcher pre-flight (`tests/test_launch_preflight.py`: a fresh checkout, Ollama, a foreign voice server on her
 port, her own running ports, the time-zone database, the helpers' start commands, Hermes's key, the paper doll, the
 shipped `tools.example.json`), `setup_core.py` (`tests/test_setup_core.py`: a re-run after an interrupted first run,
 damaged packages), the SenseVoice downloader, and `setup_tts.py` against a local stand-in for Hugging Face
 (`tests/test_setup_tts.py`: public, private with and without a token, the CDN and a mirror never seeing the token,
-resume, verify, repair, `--from-dir`, banks.json, the paper doll at its own revision and before it is pinned).
+resume, verify, repair, `--from-dir` (also a copy without the doll), banks.json, the paper doll at its own revision
+and before it is pinned).
 Replay tests that need MekaHime's archived corpora skip
 themselves. GitHub Actions runs the same command on Windows with Python 3.11 (`.github/workflows/tests.yml`). The
 tests resolve their temp folders, so an 8.3 short `TEMP` (a long Windows user name) is fine. On an install in use the
