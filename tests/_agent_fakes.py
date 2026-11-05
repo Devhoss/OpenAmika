@@ -6,6 +6,9 @@ Scenarios are chosen by words in the task text:
   "APPROVE" → the agent parks on an approval before finishing
   "ASK"     → the agent asks a question (nanoMuse) before finishing
   "SLOW"    → the agent keeps working for a few seconds (for stop tests)
+  "NOKEY"   → nanoMuse's model refuses its key: an error notice and no reply (its failure_notice)
+and by state on the fake: FakeHermes.mismatch (sessions a copied Hermes home refuses with 409 profile_mismatch),
+FakeHermes.refuse ((status, code) for every new run), FakeNanomuse.llm_ready (what GET /api/settings says).
 """
 from __future__ import annotations
 
@@ -53,6 +56,8 @@ class _Base(BaseHTTPRequestHandler):
 class FakeHermes:
     def __init__(self):
         self.runs: dict[str, dict] = {}
+        self.mismatch: set[str] = set()      # session ids another Hermes home created (409 profile_mismatch)
+        self.refuse = None                   # (status, code): refuse every new run, e.g. (429, "concurrent_run_limit")
         self.lock = threading.Lock()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.port = self.server.server_address[1]
@@ -113,6 +118,12 @@ class FakeHermes:
                 parts = self.path.split("/")
                 if self.path == "/v1/runs":
                     body = self._body()
+                    if body.get("session_id") in fake.mismatch:
+                        return self._json(409, {"error": {"code": "profile_mismatch",
+                                                          "message": "this session belongs to another Hermes profile"}})
+                    if fake.refuse:
+                        status, code = fake.refuse
+                        return self._json(status, {"error": {"code": code, "message": f"refused ({code})"}})
                     run_id = "run_" + uuid.uuid4().hex[:6]
                     fake.runs[run_id] = {"input": body.get("input", ""), "session_id": body.get("session_id"),
                                          "status": "running", "output": None, "events": [],
@@ -182,6 +193,7 @@ class FakeHermes:
 class FakeNanomuse:
     def __init__(self):
         self.threads: dict[str, dict] = {}
+        self.llm_ready = True                # GET /api/settings: does its model slot have a working key?
         self.lock = threading.Lock()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.port = self.server.server_address[1]
@@ -204,6 +216,11 @@ class FakeNanomuse:
 
     def _work(self, thread: dict, text: str):
         time.sleep(0.1)
+        if "NOKEY" in text:                  # nanoMuse's failure_notice: the model provider refused the key
+            self._add(thread, {"type": "notice", "level": "error", "code": "key",
+                               "text": "The model provider refused the API key. Check it under Connections."})
+            thread["busy"] = False
+            return
         self._add(thread, {"type": "tool", "name": "browser", "summary": "open example.com"})
         if "SLOW" in text:
             for _ in range(30):
@@ -246,6 +263,8 @@ class FakeNanomuse:
                 parts = path.split("/")
                 if path == "/api/threads":
                     return self._json(200, {"threads": [fake._meta(t) for t in fake.threads.values()]})
+                if path == "/api/settings":
+                    return self._json(200, {"version": "fake", "llm_ready": fake.llm_ready})
                 if len(parts) == 5 and parts[2] == "threads" and parts[4] == "events":
                     thread = fake.threads.get(parts[3])
                     if thread is None:

@@ -174,6 +174,40 @@ def test_hermes_rejects_bad_key(hermes):
     job = JobStore().start(adapter, "hello")
     assert wait_for(lambda: job.terminal)
     assert job.state == "failed" and "401" in (job.error or "")
+    bad = adapter.health()
+    assert "API_SERVER_KEY" in bad["detail"] and "%LOCALAPPDATA%\\hermes\\.env" in bad["detail"]   # where to look
+
+
+def test_hermes_copied_home_falls_back_to_a_session_of_its_own(hermes):
+    """A Hermes home copied from another machine refuses the sessions that machine made (409 profile_mismatch):
+    the bridge continues in HERMES_SESSION-<host> once, says so, and health stays green with a note."""
+    hermes.mismatch.add("copied")
+    adapter = HermesAdapter(base_url=hermes.base, api_key=KEY, session_id="copied", timeout_s=20)
+    job = JobStore().start(adapter, "What is 2+2?")
+    assert wait_for(lambda: job.terminal)
+    assert job.state == "done" and job.result == "The answer is 4"
+    used = hermes.runs[job.handle["run_id"]]["session_id"]
+    assert used.startswith("copied-") and adapter.session_id == used
+    assert any("profile_mismatch" in e["text"] for e in job.events if e["kind"] == "progress")
+    doc = adapter.health()
+    assert doc["ok"] is True and "profile_mismatch" in (doc.get("note") or "") and used in doc["note"]
+    hermes.mismatch.discard("copied")
+
+
+def test_hermes_refusing_tasks_is_reported_by_health_until_one_is_taken(hermes):
+    adapter = HermesAdapter(base_url=hermes.base, api_key=KEY, session_id="busy", timeout_s=20)
+    hermes.refuse = (429, "concurrent_run_limit")
+    try:
+        job = JobStore().start(adapter, "What is 2+2?")
+        assert wait_for(lambda: job.terminal)
+        assert job.state == "failed" and "HTTP 429" in (job.error or "") and "concurrent_run_limit" in job.error
+        doc = adapter.health()
+        assert doc["ok"] is False and doc["reason"] == "refused" and "refused the last task" in doc["detail"]
+    finally:
+        hermes.refuse = None
+    job = JobStore().start(adapter, "What is 2+2?")
+    assert wait_for(lambda: job.terminal) and job.state == "done"
+    assert adapter.health()["ok"] is True                                # a task it took clears it
 
 
 # ───────────────────────────── nanoMuse ─────────────────────────────
@@ -217,6 +251,37 @@ def test_nanomuse_health_reports_online_and_bad_token(nanomuse):
     assert doc["ok"] is True and doc["reason"] == "ok" and doc["version"] == "fake"
     bad = NanomuseAdapter(base_url=nanomuse.base, token="wrong").health()
     assert bad["ok"] is False and bad["reason"] == "unauthorized" and "token" in bad["detail"]
+
+
+def test_nanomuse_without_a_model_key_is_not_online(nanomuse):
+    """Its settings say llm_ready false (no key for its model): every route still answers, but nothing can be done,
+    so health says so instead of "online" and she never promises it anything."""
+    nanomuse.llm_ready = False
+    try:
+        doc = NanomuseAdapter(base_url=nanomuse.base, token=KEY).health()
+    finally:
+        nanomuse.llm_ready = True
+    assert doc["ok"] is False and doc["reason"] == "no_model"
+    assert "vault set OPENROUTER_API_KEY" in doc["detail"] and "{{vault:OPENROUTER_API_KEY}}" in doc["detail"]
+
+
+def test_nanomuse_error_notice_fails_the_job_instead_of_an_empty_success(nanomuse):
+    adapter = NanomuseAdapter(base_url=nanomuse.base, token=KEY, timeout_s=20, poll_s=0.1)
+    job = JobStore().start(adapter, "NOKEY: What is 2+2?")
+    assert wait_for(lambda: job.terminal)
+    assert job.state == "failed" and job.result is None
+    assert job.error.startswith("The model provider refused the API key.") and "model key" in job.error
+
+
+def test_nanomuse_finds_its_thread_again_after_it_was_deleted(nanomuse):
+    adapter = NanomuseAdapter(base_url=nanomuse.base, token=KEY, thread_title="Deleted later", timeout_s=20, poll_s=0.1)
+    job = JobStore().start(adapter, "What is 2+2?")
+    assert wait_for(lambda: job.terminal) and job.state == "done"
+    old = adapter._thread_id
+    nanomuse.threads.pop(old)                        # the person deleted it in nanoMuse's own app
+    job = JobStore().start(adapter, "What is 2+2?")
+    assert wait_for(lambda: job.terminal)
+    assert job.state == "done" and job.result == "The answer is 4" and adapter._thread_id not in (None, old)
 
 
 def test_health_reports_an_agent_that_is_not_running():

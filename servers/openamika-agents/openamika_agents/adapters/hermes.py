@@ -252,7 +252,9 @@ class HermesAdapter(Adapter):
         base = {"url": self.base, "version": None}
         reason, got = probe(self.client, f"{self.base}/health")
         if reason != "ok":
-            hint = " — is `hermes gateway` running?" if reason in ("unreachable", "timeout") else ""
+            hint = (" — is `hermes gateway` running, with an API_SERVER_KEY of 16 or more characters in its .env? "
+                    "(Without one Hermes runs but never opens this port; its logs\\gateway.log says why)"
+                    if reason in ("unreachable", "timeout") else "")
             return {"ok": False, "reason": reason, "detail": f"Hermes: {got}{hint}", **base}
         try:
             base["version"] = (got.json() or {}).get("version")
@@ -261,8 +263,8 @@ class HermesAdapter(Adapter):
         reason, _ = probe(self.client, f"{self.base}/health/detailed", self._headers())
         if reason == "unauthorized":
             return {"ok": False, "reason": reason, **base,
-                    "detail": "Hermes is running but rejects the API key "
-                              "(HERMES_API_KEY must equal API_SERVER_KEY in hermes/.env)"}
+                    "detail": "Hermes is running but rejects the API key (HERMES_API_KEY in config/tools.json must "
+                              "equal API_SERVER_KEY in the .env of the Hermes home, %LOCALAPPDATA%\\hermes\\.env by default)"}
         label = f"Hermes {base['version']}" if base["version"] else "Hermes"
         refusal = self.last_refusal
         if refusal and time.time() - float(refusal.get("at") or 0) < REFUSAL_TTL_S:

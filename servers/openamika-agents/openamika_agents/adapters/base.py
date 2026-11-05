@@ -24,7 +24,8 @@ class Adapter:
     def health(self) -> dict:
         """Is the agent itself up and talking to us? {"ok": bool, "reason": str, "detail": str, "url": str,
         "version": str|None}; reason is ok / unreachable / timeout / unauthorized / http_error / error
-        (adapters may add their own, e.g. nanoMuse's "starting"). Quick (a few seconds at most), never raises."""
+        (adapters may add their own: nanoMuse's "starting" and "no_model", Hermes's "refused"). Quick (a few seconds
+        at most), never raises."""
         raise NotImplementedError
 
 

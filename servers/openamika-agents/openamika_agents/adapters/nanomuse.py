@@ -9,7 +9,13 @@
     POST /api/approvals/{id} {approved, scope, reason}
     POST /api/threads/{id}/stop
     GET  /api/health (no auth: {ok, version, auth, starting?})   → used by health()
+    GET  /api/settings {llm_ready, ...}                          → health(): is a model (its key) set up?
 Env: NANOMUSE_URL, NANOMUSE_TOKEN or NANOMUSE_TOKEN_FILE, NANOMUSE_THREAD (title), NANOMUSE_LANGUAGE.
+
+A nanoMuse without a working model key still answers every route, and a task then ends in an error notice
+("The model provider refused the API key…") instead of a reply. So health() reports reason "no_model" when its
+settings say llm_ready is false, and an error notice ends the job as failed with nanoMuse's own sentence (not as
+"done" with no reply), so she never reports a success that did not happen.
 """
 from __future__ import annotations
 
@@ -115,7 +121,24 @@ class NanomuseAdapter(Adapter):
                         "detail": "nanoMuse is running but rejects the token "
                                   "(NANOMUSE_TOKEN / NANOMUSE_TOKEN_FILE should hold <data_dir>/server_token)"}
         label = f"nanoMuse {base['version']}" if base["version"] else "nanoMuse"
+        if self._llm_ready() is False:
+            return {"ok": False, "reason": "no_model", **base,
+                    "detail": f"{label} is running but has no working model: its [llm] api_key is empty or unresolved "
+                              "(store the key with `nanomuse vault set OPENROUTER_API_KEY` and use "
+                              "api_key = \"{{vault:OPENROUTER_API_KEY}}\" in its config.toml; see docs/TOOLS.md)"}
         return {"ok": True, "reason": "ok", "detail": f"{label} online at {self.base}", **base}
+
+    def _llm_ready(self):
+        """nanoMuse's own answer to "can the model slot answer a request?" (GET /api/settings llm_ready): True, False,
+        or None when it cannot be read (an older nanoMuse, a hiccup): then it is not held against it."""
+        reason, got = probe(self.client, f"{self.base}/api/settings", self._headers())
+        if reason != "ok":
+            return None
+        try:
+            ready = (got.json() or {}).get("llm_ready")
+        except Exception:
+            return None
+        return ready if isinstance(ready, bool) else None
 
     # ── lifecycle ──
     def run(self, job: Job) -> None:
@@ -129,7 +152,14 @@ class NanomuseAdapter(Adapter):
         body = {"text": text}
         if self.language:
             body["language"] = self.language
-        sent = self._post(f"/api/threads/{tid}/send", body)
+        try:
+            sent = self._post(f"/api/threads/{tid}/send", body)
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code != 404:
+                raise
+            self._thread_id = None              # its thread was deleted (in nanoMuse's own app): find or make it again
+            tid = self.thread_id()
+            sent = self._post(f"/api/threads/{tid}/send", body)
         event = sent.get("event") if isinstance(sent.get("event"), dict) else {}
         job.handle.update({"thread_id": tid, "sent_id": event.get("id")})
         job.add("progress", "sent")
@@ -140,6 +170,7 @@ class NanomuseAdapter(Adapter):
         sent_id = job.handle.get("sent_id")
         seen: dict[str, str] = {}          # event id -> status (to notice pending → answered)
         last_text = ""
+        failure = ""                       # nanoMuse's error notice, unless a reply came after it
         saw_busy = False
         started = time.time()
         deadline = started + self.timeout_s
@@ -173,7 +204,7 @@ class NanomuseAdapter(Adapter):
                 if kind == "assistant":
                     text = first_text(event, "text", "content")
                     if text and previous is None:
-                        last_text = text
+                        last_text, failure = text, ""
                         job.add("text", text)
                 elif kind == "tool":
                     label = first_text(event, "summary", "name", "tool", "text")
@@ -195,11 +226,17 @@ class NanomuseAdapter(Adapter):
                     text = first_text(event, "text")
                     if text and previous is None:
                         job.add("progress", text)
+                        if str(event.get("level") or "") == "error":     # its model could not answer (key, network…)
+                            failure = text + (" (nanoMuse's model key is missing or wrong: see docs/TOOLS.md)"
+                                              if event.get("code") == "key" else "")
             if job.terminal:
                 return
             idle = (not busy) and queued == 0 and job.pending is None
             if idle and (saw_busy or time.time() - started > 3 * self.poll_s + 1):
-                job.set_state("done", result=last_text or "(no reply)")
+                if failure:
+                    job.set_state("failed", error=failure)
+                else:
+                    job.set_state("done", result=last_text or "(no reply)")
                 return
         if not job.terminal:
             job.set_state("failed", error="timed out waiting for nanoMuse")

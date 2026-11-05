@@ -272,7 +272,7 @@
     const entries = Object.entries(s.servers || {});
     if (!entries.length) {
       box.append(el("section", { class: "tech-card" },
-        el("div", { class: "card-hint", text: "No servers yet — add one below. Hermes Agent and nanoMuse plug in through servers/openamika-agents; the smart-home server lives in servers/openamika-iot." })));
+        el("div", { class: "card-hint", text: "No servers yet. To connect Hermes Agent or nanoMuse, copy config/tools.example.json to config/tools.json and fill in its hermes or nanomuse entry (README, “Her helpers”; docs/TOOLS.md has every step), then reload this page — or switch to Professional (top right) to add a server here. The smart-home server lives in servers/openamika-iot." })));
       return;
     }
     for (const [name, server] of entries) {
@@ -287,13 +287,15 @@
       const starting = agentDown && health.reason === "starting";
       const startFailed = agentDown && health.reason === "start_failed";
       const refusing = agentDown && health.reason === "refused";      // up and authenticated, but it would not take her last task
+      const noModel = agentDown && health.reason === "no_model";      // up, but its own model has no working key
       const canStart = server.kind === "agent" && server.enabled && server.autostart && agentDown && !starting;
       const head = el("div", { class: "server-head" },
         el("span", { class: "dot " + (!server.enabled ? "" : !server.connected ? "warn" : starting ? "warn" : agentDown ? "err" : "ok") }),
         el("span", { class: "name", text: name }),
         el("span", { class: "tag", text: server.kind === "agent" ? "agent" : server.transport }),
         health ? el("span", { class: "tag", style: starting ? "color:var(--warn);" : agentDown ? "color:var(--err);" : "",
-          text: starting ? "agent starting…" : startFailed ? "start failed" : refusing ? "agent refusing tasks" : agentDown ? "agent unreachable"
+          text: starting ? "agent starting…" : startFailed ? "start failed" : refusing ? "agent refusing tasks"
+            : noModel ? "agent has no model" : agentDown ? "agent unreachable"
             : "agent online" + (health.version ? " · v" + health.version : "") }) : "",
         canStart ? el("button", {
           class: "btn small primary", text: "Start",
@@ -340,13 +342,15 @@
       if (starting) card.append(el("div", { class: "card-hint", style: "margin-top:8px;", text: (health.detail || "starting…") + " — this card updates by itself." }));
       else if (agentDown) card.append(el("div", { class: "card-hint", style: "color:var(--err);margin-top:8px;",
         text: (health.detail || "The bridge is up but the agent itself does not answer.")
-          + (refusing ? " She is told it is not taking tasks and will not promise it anything." : " She is told it is unreachable and will not promise it anything.") }));
+          + (refusing ? " She is told it is not taking tasks and will not promise it anything."
+            : noModel ? " She is told it cannot do anything until its model is set up, and will not promise it anything."
+            : " She is told it is unreachable and will not promise it anything.") }));
       if (health && health.ok && health.note) card.append(el("div", { class: "card-hint", style: "margin-top:8px;", text: health.note }));
       if (server.kind === "agent") {
         const startField = el("div", { class: "field", style: "margin-top:10px;", "data-pro": "" },   // Professional only
           el("label", { text: "Start command — run automatically when the agent is not running (leave empty to manage it yourself)" }));
         const startInput = el("input", { type: "text", class: "mono", "data-autostart": name, spellcheck: "false",
-          placeholder: name === "nanomuse" ? "C:\\path\\to\\nanomuse\\venv\\Scripts\\nanomuse.exe serve --no-qr --host 127.0.0.1 --port 8787" : "C:\\Users\\you\\AppData\\Local\\hermes\\bin\\hermes.exe gateway" });
+          placeholder: name === "nanomuse" ? "C:\\OpenAmika\\Nanomuse\\venv\\Scripts\\nanomuse.exe serve --config C:\\OpenAmika\\Nanomuse\\data\\config.toml --no-qr --host 127.0.0.1 --port 8787" : "%LOCALAPPDATA%\\hermes\\bin\\hermes.exe gateway" });
         startInput.value = joinCommand(server.autostart);
         startField.append(startInput);
         card.append(startField);
