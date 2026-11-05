@@ -83,9 +83,10 @@ exchange on her stage with a second Live2D model, the paper doll. Setup: [TOOLS.
 - **The paper doll** (`avatar/models/Host/`, from `scripts/setup_tts.py`; Hugging Face `live2d/Host/`): a Live2D
   model whose `banks.json` says `"role": "agent"`. The gateway's avatar registry marks it, her model picker never
   offers it, and the Use page seats it bottom-right (placement from its `banks.json`) whenever the tool layer is on
-  and an agent server is enabled. Its motions follow the dialogue: `think*` while a job runs, `talk*` / `listen*`
-  with the bubbles, `happy*` on a result, `worried*` on an error, `surprise*` on a question or approval. Nothing in
-  Hermes or nanoMuse knows about it.
+  and an agent server is enabled. Its motions follow the dialogue, picked by its own state loop only: `think*`
+  while a job runs, `talk*` / `listen*` with the bubbles, `happy*` on a result, `worried*` on an error,
+  `surprise*` on a question or approval, `idle*` otherwise. Steps the bridge makes itself (`sent`, `started`…,
+  marked `internal`) stay in the transcript, off the doll. Nothing in Hermes or nanoMuse knows about it.
 - **Health**: a helper that is down, refuses tasks, rejects the key or has no model shows red on the Tools page,
   goes into her prompt (she does not promise it anything), and an `ask` to it is not sent. The launcher's
   pre-flight checks the same before anything starts.

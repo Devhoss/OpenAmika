@@ -725,7 +725,8 @@ def test_told_ignores_unknown_or_running_jobs(wired):
 
 def test_tool_dialogue_records_her_ask_and_everything_that_comes_back(wired):
     wired["hub"].replies[("hermes", "ask")] = {"job": "j1", "state": "running", "step": "started", "cursor": 1, "pending": None,
-                                                "events": [{"i": 1, "ts": 1.0, "kind": "progress", "text": "started"}]}
+                                                "events": [{"i": 1, "ts": 1.0, "kind": "progress", "text": "started",
+                                                            "internal": True}]}
     wired["state"]["reply"] = json.dumps({
         "calls": [{"tool": "hermes__ask", "arguments": {"task": "Find the nearest hot pot", "context": "he is hungry"},
                    "quote": "find me a hot pot"}], "answers": []})
@@ -735,6 +736,7 @@ def test_tool_dialogue_records_her_ask_and_everything_that_comes_back(wired):
     assert lines[0]["text"].startswith("Find the nearest hot pot") and "he is hungry" in lines[0]["text"]
     assert lines[0]["quote"] == "find me a hot pot" and lines[0]["job"] == "j1"
     assert lines[1]["who"] == "agent" and lines[1]["kind"] == "progress" and lines[1]["text"] == "started"
+    assert lines[1]["internal"] is True                      # the bridge's own step: in the log, never a doll bubble
     # the helper works, asks, and finishes
     wired["hub"].replies[("hermes", "status")] = {"job": "j1", "state": "done", "step": "", "cursor": 4, "pending": None,
                                                    "result": "Haidilao Downtown, 4.8 stars",
@@ -744,6 +746,7 @@ def test_tool_dialogue_records_her_ask_and_everything_that_comes_back(wired):
     f_tools._poll_once()
     kinds = [(e["who"], e["kind"]) for e in f_tools._DIALOGUE]
     assert kinds == [("amika", "ask"), ("agent", "progress"), ("agent", "progress"), ("agent", "text"), ("agent", "result")]
+    assert [e.get("internal") for e in f_tools._DIALOGUE] == [None, True, None, None, None]
     assert list(f_tools._DIALOGUE)[-1]["text"] == "Haidilao Downtown, 4.8 stars"
     # a replayed snapshot (the answer tool returns events from 0) adds nothing twice
     f_tools._apply_status(f_tools._JOBS["hermes:j1"], wired["hub"].replies[("hermes", "status")], relay=False)

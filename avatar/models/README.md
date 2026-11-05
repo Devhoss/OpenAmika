@@ -66,7 +66,8 @@ mark it in its `banks.json`:
   zooming the doll on the Use page saves a per-browser override; "Re-center" clears it.
 - It plays motions by file-name prefix, no banks needed: `idle*`, `talk*` (when it has the word),
   `listen*` (while she talks to it), `think*` (a job running), `happy*` (a result), `worried*`
-  (an error), `surprise*` (a question for you). Recordings made for her can be reused for it when the
+  (an error), `surprise*` (a question for you), chosen by its state alone (the Use page switches off
+  the library's random idle motions on it). Recordings made for her can be reused for it when the
   two share the standard Cubism parameter ids (the paper doll's 64 motions were made this way from her
   recordings; `<YourDoll>` holds your model's `.model3.json`, `.moc3`, `.cdi3.json` and physics):
 

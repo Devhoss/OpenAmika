@@ -40,6 +40,11 @@ class Job:
                 self.step = text[:160]
         return event
 
+    def note(self, text: str, **extra) -> dict:
+        """A progress step of the bridge's own ("sent", "started", "stop requested", a refused session…), not something
+        the agent said or did: `internal` keeps it in the transcript but off the paper doll's speech bubbles."""
+        return self.add("progress", text, internal=True, **extra)
+
     def set_pending(self, kind: str, ident: str, text: str, **extra) -> dict:
         pending = {"kind": kind, "id": ident, "text": (text or "")[:1500]}
         pending.update({k: v for k, v in extra.items() if v is not None})
@@ -57,7 +62,7 @@ class Job:
                 self.state = "running"
             self.updated = time.time()
         if note:
-            self.add("progress", note)
+            self.note(note)
 
     def set_state(self, state: str, *, result=None, error=None):
         if state not in STATES:

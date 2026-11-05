@@ -15,7 +15,8 @@ Env: NANOMUSE_URL, NANOMUSE_TOKEN or NANOMUSE_TOKEN_FILE, NANOMUSE_THREAD (title
 A nanoMuse without a working model key still answers every route, and a task then ends in an error notice
 ("The model provider refused the API key…") instead of a reply. So health() reports reason "no_model" when its
 settings say llm_ready is false, and an error notice ends the job as failed with nanoMuse's own sentence (not as
-"done" with no reply), so she never reports a success that did not happen.
+"done" with no reply), so she never reports a success that did not happen. That sentence is said once, as the
+failure; when nanoMuse goes on after it (a step, a reply), it becomes a passing progress step instead.
 """
 from __future__ import annotations
 
@@ -162,7 +163,7 @@ class NanomuseAdapter(Adapter):
             sent = self._post(f"/api/threads/{tid}/send", body)
         event = sent.get("event") if isinstance(sent.get("event"), dict) else {}
         job.handle.update({"thread_id": tid, "sent_id": event.get("id")})
-        job.add("progress", "sent")
+        job.note("sent")
         self._follow(job)
 
     def _follow(self, job: Job) -> None:
@@ -171,6 +172,7 @@ class NanomuseAdapter(Adapter):
         seen: dict[str, str] = {}          # event id -> status (to notice pending → answered)
         last_text = ""
         failure = ""                       # nanoMuse's error notice, unless a reply came after it
+        notice = ""                        # that notice, held: said as a step only if anything comes after it
         saw_busy = False
         started = time.time()
         deadline = started + self.timeout_s
@@ -179,7 +181,7 @@ class NanomuseAdapter(Adapter):
             try:
                 doc = self._get(f"/api/threads/{tid}/events?limit=200")
             except Exception as error:
-                job.add("progress", f"poll failed: {str(error)[:120]}")
+                job.note(f"poll failed: {str(error)[:120]}")
                 continue
             meta = doc.get("thread") if isinstance(doc, dict) else {}
             events = doc.get("events") if isinstance(doc, dict) else []
@@ -201,6 +203,9 @@ class NanomuseAdapter(Adapter):
                 if previous == status:
                     continue
                 seen[ident] = status
+                if notice:                               # it went on after its error notice: that was a passing step
+                    job.add("progress", notice)
+                    notice = ""
                 if kind == "assistant":
                     text = first_text(event, "text", "content")
                     if text and previous is None:
@@ -225,10 +230,13 @@ class NanomuseAdapter(Adapter):
                 elif kind == "notice":
                     text = first_text(event, "text")
                     if text and previous is None:
-                        job.add("progress", text)
                         if str(event.get("level") or "") == "error":     # its model could not answer (key, network…)
+                            # held back: when it is the last word, it ends the job as its failure, said once
+                            notice = text
                             failure = text + (" (nanoMuse's model key is missing or wrong: see docs/TOOLS.md)"
                                               if event.get("code") == "key" else "")
+                        else:
+                            job.add("progress", text)
             if job.terminal:
                 return
             idle = (not busy) and queued == 0 and job.pending is None
@@ -239,6 +247,8 @@ class NanomuseAdapter(Adapter):
                     job.set_state("done", result=last_text or "(no reply)")
                 return
         if not job.terminal:
+            if notice:
+                job.add("progress", notice)
             job.set_state("failed", error="timed out waiting for nanoMuse")
 
     # ── control ──

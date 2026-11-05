@@ -973,6 +973,7 @@
     idle: ["idle"], working: ["think", "idle"], talk: ["talk", "happy"], listen: ["listen", "idle"],
     happy: ["happy", "talk"], worried: ["worried", "listen"], surprise: ["surprise", "listen"],
   };
+  const AGENT_NO_IDLE_GROUP = "__agent_state_loop__";   // no such group: the library never auto-plays on the doll
   const agent = { opt: null, model: null, baseW: 0, baseH: 0, motions: [], loading: null,
                   visible: false, shown: false, slide: 60, alpha: 0, homeY: 0,
                   base: "idle", state: "idle", stateUntil: 0, loop: null, lastMotion: null };
@@ -1002,6 +1003,10 @@
       } catch (_) { agent.motions = []; }
       const mm = model.internalModel && model.internalModel.motionManager;
       if (mm) await injectExternalMotions(mm, opt);
+      // Its state loop alone picks its motions. The gateway puts every loose motion of a model3.json without Motions
+      // into one "Idle" group, and the library starts a random motion of its idle group whenever nothing plays (any
+      // family: surprise while idle, happy mid-job). Point the library at a group that does not exist.
+      if (mm && mm.groups) mm.groups.idle = AGENT_NO_IDLE_GROUP;
       slowFocus(model);
       pixiApp.stage.addChild(model);
       repositionAgent();

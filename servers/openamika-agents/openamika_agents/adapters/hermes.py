@@ -306,7 +306,7 @@ class HermesAdapter(Adapter):
                                      f"(profile_mismatch: it was created by another Hermes install); "
                                      f"using session '{fallback}' on this install instead")
                 print(f"[openamika-agents] hermes: {self.session_note}", file=sys.stderr, flush=True)
-                job.add("progress", self.session_note)
+                job.note(self.session_note)
                 self.session_id = body["session_id"] = fallback
                 doc = self._post("/v1/runs", body)
         except HermesHTTPError as error:
@@ -318,7 +318,7 @@ class HermesAdapter(Adapter):
         if not run_id:
             raise RuntimeError(f"Hermes returned no run_id: {str(doc)[:200]}")
         job.handle["run_id"] = run_id
-        job.add("progress", "started", run_id=run_id)
+        job.note("started", run_id=run_id)
         self._follow(job, run_id)
 
     def _follow(self, job: Job, run_id: str) -> None:
@@ -336,7 +336,7 @@ class HermesAdapter(Adapter):
                     if time.time() > deadline or job.handle.get("run_id") != run_id:
                         break
         except Exception as error:
-            job.add("progress", f"event stream closed: {str(error)[:120]}")
+            job.note(f"event stream closed: {str(error)[:120]}")
         if not terminal and job.handle.get("run_id") == run_id:
             self._poll(job, run_id, deadline)
 
@@ -468,7 +468,7 @@ class HermesAdapter(Adapter):
             raise RuntimeError("the job is still running; wait for it or stop it first")
         job.result, job.error = None, None
         job.set_state("running")
-        job.add("progress", "continuing")
+        job.note("continuing")
         spawn(lambda j: self._launch(j, text), job)
         return "continued"
 
@@ -478,8 +478,8 @@ class HermesAdapter(Adapter):
             try:
                 self._post(f"/v1/runs/{run_id}/stop", {})
             except Exception as error:
-                job.add("progress", f"stop failed: {str(error)[:120]}")
+                job.note(f"stop failed: {str(error)[:120]}")
                 raise
-            job.add("progress", "stop requested")
+            job.note("stop requested")
             return "stopping"
         return job.state

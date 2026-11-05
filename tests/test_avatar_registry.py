@@ -1,9 +1,10 @@
 """The gateway's Live2D registry: character vs agent models, placement hints, and a Setup-page save
 that must not strip what it does not edit. Functions are lifted from speech/api.py by source so the
-heavy gateway module (STT, VAD, sockets) never imports."""
+heavy gateway module (STT, VAD, sockets) never imports. Also how the Use page plays the paper doll (by source)."""
 import ast
 import asyncio
 import json
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -94,3 +95,36 @@ def test_tts_audio_tells_the_page_which_tier_spoke():
     text = SOURCE.read_text(encoding="utf-8")
     block = text[text.index('"type": "tts_audio",\n            "turn_id": tts_turn_id'):][:1200]
     assert '"kind": inflight.get("kind")' in block
+
+
+def _function(source: str, signature: str) -> str:
+    body = source[source.index(signature):]
+    return body[:body.index("\n  }\n") + 4]
+
+
+def test_the_paper_doll_plays_only_what_its_state_loop_picks():
+    """The gateway serves a model3.json without Motions (the paper doll's) with every loose motion in one "Idle"
+    group, and the Live2D library starts a random motion of its idle group whenever nothing plays: the doll was
+    surprised while idle and happy mid-job, and its state loop (think* while a job runs, idle* otherwise) rarely got
+    a turn. loadAgent points the library's idle group at one that does not exist, before the loop starts."""
+    api = SOURCE.read_text(encoding="utf-8")
+    assert 'refs["Motions"] = {"Idle": motions}' in api                 # why: every loose motion is "Idle"
+    vendor = (ROOT / "ui" / "vendor" / "cubism4.min.js").read_text(encoding="utf-8")
+    assert "startRandomMotion(this.groups.idle" in vendor                # what the library plays when nothing does
+    engine = (ROOT / "ui" / "live2d-engine.js").read_text(encoding="utf-8")
+    load = _function(engine, "function loadAgent()")
+    guard = load.index("mm.groups.idle = AGENT_NO_IDLE_GROUP")
+    assert load.index("injectExternalMotions(mm, opt)") < guard < load.index("startAgentLoop()")
+    group = re.search(r'const AGENT_NO_IDLE_GROUP = "([^"]*)"', engine).group(1)
+    assert group and group not in ("Idle", "idle")
+    # the loop itself picks by state, and only when nothing of its own plays
+    loop = _function(engine, "function startAgentLoop()")
+    assert "if (!agentMotionPlaying()) agentPlay(agentPick(agent.state));" in loop
+
+
+def test_the_paper_doll_never_says_the_bridges_own_steps():
+    """Steps the agents bridge makes itself ("sent", "started", "stop requested"…) carry `internal`: the Use page
+    keeps them in the tool dialogue but gives them no speech bubble on the doll."""
+    page = (ROOT / "ui" / "use.js").read_text(encoding="utf-8")
+    bubbles = _function(page, "function bubbleNewLines(entries)")
+    assert "!e.internal" in bubbles

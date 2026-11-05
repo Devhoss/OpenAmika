@@ -255,7 +255,8 @@ def _command_line(server: str, scfg: dict, tool: str, arguments: dict, agent: bo
 
 def _note_events(job: dict, events) -> None:
     """Bridge events newer than the job's cursor become dialogue lines (progress, the agent's words,
-    questions, approvals, the final result or failure)."""
+    questions, approvals, the final result or failure). A step of the bridge's own ("sent", "started"…) keeps its
+    `internal` mark: the transcript shows it, the paper doll does not say it."""
     for event in events or []:
         if not isinstance(event, dict):
             continue
@@ -264,7 +265,7 @@ def _note_events(job: dict, events) -> None:
         if kind is None or (not text and kind not in ("result", "error", "stopped")):
             continue
         _say(job["server"], "agent", kind, text or {"result": "（没有带回具体内容）", "error": "没说原因", "stopped": "叫停了"}[kind],
-             job=job["job"])
+             job=job["job"], internal=True if event.get("internal") else None)
 
 
 def is_agent_server(scfg: dict, tools=None) -> bool:

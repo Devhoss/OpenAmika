@@ -925,7 +925,9 @@ registerProcessor('pcm-pusher', PCMPusher);`;
   // ── speech bubbles: the same exchange, played on stage ──
   // Her lines come out of her, the helper's lines out of the agent avatar (the paper doll that stands
   // in for Hermes / nanoMuse); the two turn to each other while a bubble is up. Lines that were already
-  // in the log when the page opened stay in the log: only new ones get a bubble.
+  // in the log when the page opened stay in the log: only new ones get a bubble. The bridge's own steps
+  // ("sent", "started", "stop requested"…, marked internal) stay in the log too: the doll says only what the
+  // helper itself said or did.
   const bubbles = { her: $("bubbleHer"), agent: $("bubbleAgent") };
   const BUBBLE_MOOD = { result: "happy", error: "worried", stopped: "worried", fabricated: "worried",
     question: "surprise", approval: "surprise" };
@@ -934,7 +936,8 @@ registerProcessor('pcm-pusher', PCMPusher);`;
   function bubbleNewLines(entries) {
     const last = entries.length ? Number(entries[entries.length - 1].ts) || 0 : 0;
     if (bubbleSeen === null) { bubbleSeen = last; return; }
-    const fresh = entries.filter((e) => (Number(e.ts) || 0) > bubbleSeen && (e.who === "amika" || e.who === "agent"));
+    const fresh = entries.filter((e) => (Number(e.ts) || 0) > bubbleSeen && !e.internal &&
+                                        (e.who === "amika" || e.who === "agent"));
     bubbleSeen = Math.max(bubbleSeen, last);
     // replay at the real pace: she typed each command, sent it when the typing was done, and the helper answered
     // (the brain's outbox, f_tools._type_and_send) — so each line appears as far after the first as it happened

@@ -7,6 +7,7 @@ Scenarios are chosen by words in the task text:
   "ASK"     → the agent asks a question (nanoMuse) before finishing
   "SLOW"    → the agent keeps working for a few seconds (for stop tests)
   "NOKEY"   → nanoMuse's model refuses its key: an error notice and no reply (its failure_notice)
+  "RECOVER" → nanoMuse says an error notice (a network hiccup), then answers after all
 and by state on the fake: FakeHermes.mismatch (sessions a copied Hermes home refuses with 409 profile_mismatch),
 FakeHermes.refuse ((status, code) for every new run), FakeNanomuse.llm_ready (what GET /api/settings says).
 """
@@ -221,6 +222,9 @@ class FakeNanomuse:
                                "text": "The model provider refused the API key. Check it under Connections."})
             thread["busy"] = False
             return
+        if "RECOVER" in text:
+            self._add(thread, {"type": "notice", "level": "error", "code": "network",
+                               "text": "The model provider could not be reached. Retrying."})
         self._add(thread, {"type": "tool", "name": "browser", "summary": "open example.com"})
         if "SLOW" in text:
             for _ in range(30):

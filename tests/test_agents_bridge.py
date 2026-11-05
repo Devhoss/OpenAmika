@@ -64,6 +64,8 @@ def test_hermes_simple_task_reports_result(hermes):
     kinds = [e["kind"] for e in job.events]
     assert "progress" in kinds and kinds[-1] == "done"
     assert any("terminal" in e["text"] for e in job.events if e["kind"] == "progress")
+    # "started" is the bridge's own step (internal: no bubble on the paper doll); Hermes's tool steps are its own
+    assert all(bool(e.get("internal")) == (e["text"] == "started") for e in job.events if e["kind"] == "progress")
     snap = job.snapshot(cursor=0)
     assert snap["job"] == job.id and snap["cursor"] == len(job.events)
     assert job.snapshot(cursor=snap["cursor"])["events"] == []
@@ -218,6 +220,9 @@ def test_nanomuse_simple_task(nanomuse):
     assert wait_for(lambda: job.terminal)
     assert job.state == "done" and job.result == "The answer is 4"
     assert any(e["kind"] == "progress" and "example.com" in e["text"] for e in job.events)
+    # the bridge's own step is marked internal (the paper doll never says "sent"); nanoMuse's own steps are not
+    steps = {e["text"]: e.get("internal") for e in job.events if e["kind"] == "progress"}
+    assert steps["sent"] is True and steps["open example.com"] is None
     # one thread, reused
     assert len(nanomuse.threads) == 1
     job2 = JobStore().start(adapter, "again?")
@@ -271,6 +276,18 @@ def test_nanomuse_error_notice_fails_the_job_instead_of_an_empty_success(nanomus
     assert wait_for(lambda: job.terminal)
     assert job.state == "failed" and job.result is None
     assert job.error.startswith("The model provider refused the API key.") and "model key" in job.error
+    # said once, as the failure: not first as a "working" step too
+    told = [e["kind"] for e in job.events if "refused the API key" in e["text"]]
+    assert told == ["failed"]
+
+
+def test_nanomuse_error_notice_it_recovers_from_is_a_passing_step(nanomuse):
+    adapter = NanomuseAdapter(base_url=nanomuse.base, token=KEY, timeout_s=20, poll_s=0.1)
+    job = JobStore().start(adapter, "RECOVER: What is 2+2?")
+    assert wait_for(lambda: job.terminal)
+    assert job.state == "done" and job.result == "The answer is 4"
+    told = [e["kind"] for e in job.events if "could not be reached" in e["text"]]
+    assert told == ["progress"]
 
 
 def test_nanomuse_finds_its_thread_again_after_it_was_deleted(nanomuse):

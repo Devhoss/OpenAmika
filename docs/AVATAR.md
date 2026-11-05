@@ -57,8 +57,10 @@ avatar/models/Host/
   slides away when none is. Placement comes from `banks.json` (`scale` = height as a fraction of the stage,
   `nx`/`ny` = position, `head_y` = where its head sits, for the bubbles and glances); a drag or a zoom is kept per
   browser, "Re-center" clears it.
-- **Driven** by the tool dialogue, with no banks: motions are picked by file-name prefix. Its base state is
-  `think*` while any job runs (else `idle*`); each new dialogue line becomes a speech bubble, the helper's out of
+- **Driven** by the tool dialogue, with no banks: motions are picked by file-name prefix, by its own state loop
+  only (the library's random idle motions are switched off on the doll). Its base state is `think*` while any
+  job runs (else `idle*`); each new dialogue line (but the bridge's own `internal` steps, such as `sent`) becomes
+  a speech bubble, the helper's out of
   the doll (`talk*`, or the line's mood: `happy*` on a result, `worried*` on an error or a stop, `surprise*` on a
   question or an approval), hers out of her while the doll listens (`listen*`). A missing family falls back to
   another (`think` → `idle`, `talk` → `happy`, `listen` → `idle`, `happy` → `talk`, `worried` and `surprise` →
