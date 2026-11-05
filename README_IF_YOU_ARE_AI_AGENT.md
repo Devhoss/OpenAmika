@@ -8,8 +8,9 @@ ever disagree, the code wins, and you should fix this file in the same change.
 
 ## 0. Hard rules
 
-1. **Her assets are not yours to share.** Amika's voice (GPT-SoVITS weights + reference clips), her Live2D model and
-   her art come from the Hugging Face repository `MekaHime/MekaHime_Amika` and belong to MekaHime Inc. under a
+1. **Her assets are not yours to share.** Amika's voice (GPT-SoVITS weights + reference clips), her Live2D model, her
+   art and the paper doll that stands in for her helpers (`live2d/Host`) come from the Hugging Face repository
+   `MekaHime/MekaHime_Amika` and belong to MekaHime Inc. under a
    personal-use license: personal, non-commercial use only, 18+, no redistribution or re-hosting, no training,
    fine-tuning or distilling of other models on them, visible credit to MekaHime when the person posts videos or
    streams with her. Never commit them, upload them, bake them into an image or a release, mirror them, or use them
@@ -23,7 +24,9 @@ ever disagree, the code wins, and you should fix this file in the same change.
    child- or pet-safety equipment or anything that can cause harm. The person accepts the statement in the dialog on
    the Tools page (§8).
 4. **Secrets stay where they are.** `brain/.env` (OpenRouter and other API keys), `config/messengers.json` (bot
-   tokens), `config/tools.json` (agent keys) and `HF_TOKEN` are the person's. Never print them, never commit them,
+   tokens), `config/tools.json` (agent keys), `HF_TOKEN`, and the helpers' own files (Hermes's home
+   `%LOCALAPPDATA%\hermes`: `.env`, `auth.json`, memories, sessions; nanoMuse's `Nanomuse\data`: `server_token`,
+   `vault.*`, its databases and threads) are the person's. Never print them, never commit them,
    never put a token on a command line that ends up in a log (prefer environment variables). `.gitignore` already
    excludes every such file; never `git add -f` one.
 5. **Never commit machine-local state**: `settings.json`, `envs/`, `logs/`, `memory_f/`, `brain/memories/`,
@@ -31,7 +34,8 @@ ever disagree, the code wins, and you should fix this file in the same change.
    `speech/models/*` (except `DOWNLOAD.md`), `vendor/tts-engine/*` (except `main.py`, `requirements-tts.txt`,
    `README.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`). After onboarding, `config/build_f.json` and
    `config/word_replace.json` hold the person's name and city: do not commit those changes to a public fork.
-6. **Do not disturb a running stack.** Her default ports are 53000, 5202, 8011, 8002, 8014 and 5215 (§2). To inspect,
+6. **Do not disturb a running stack.** Her default ports are 53000, 5202, 8011, 8002, 8014 and 5215, her helpers'
+   8642 (Hermes Agent) and 8787 (nanoMuse) (§2). To inspect,
    use `launch.py --check` (starts nothing; while she runs, her own ports read `OK … held by this OpenAmika
    (running)`) and the health URLs; to experiment, use other ports. `launch.py` stops an earlier instance *of the
    same folder* when it starts ("grace"), so starting her twice restarts her.
@@ -96,7 +100,8 @@ ever disagree, the code wins, and you should fix this file in the same change.
 
 `launch.py` (run by `Start_OpenAmika.bat` with the brain python) starts everything in one console, in this order:
 the services in `settings.json` → `services` (her voice server; the smart-home ones only after the IoT statement is
-accepted) and the agents in `config/tools.json` autostart entries, in parallel; then the core one by one, each
+accepted) and the agents in `config/tools.json` autostart entries (when its top-level `enabled` and the entry's
+`enabled` are true), in parallel; then the core one by one, each
 waiting for its health URL: embedder → brain → vision (when enabled) → speech → messengers. The browser opens when
 speech answers. Ctrl+C (or `Stop_OpenAmika.bat`) stops everything this launcher started. Every process binds
 127.0.0.1.
@@ -112,6 +117,9 @@ speech answers. Ctrl+C (or `Stop_OpenAmika.bat`) stops everything this launcher 
 | her voice server | `vendor/tts-engine/main.py` (aiohttp + Socket.IO, GPT-SoVITS v2ProPlus) | `vendor/tts-engine/.venv` (torch 2.9.1, CUDA 12.8) | 8002 (`tts_url`, `services.tts`) | `GET /ping` (`503 loading` for ~20 s, then `ok`) | – |
 | Ollama (optional) | – | – | 11434 (`local_model_url`, Setup → Brain) | – | – |
 | mosquitto / zigbee2mqtt (optional, IoT) | `IoT/` | – | 1883 / 8080 | – | the `iot` MCP server (`servers/openamika-iot`) |
+| agents bridge (one per enabled helper) | `python -m openamika_agents hermes\|nanomuse`, cwd `servers/openamika-agents` | `envs/brain` (spawned by the brain over stdio; nothing to install) | – (MCP over stdio) | its `health` tool | its helper over HTTP |
+| Hermes Agent (optional helper) | `%LOCALAPPDATA%\hermes\bin\hermes.exe gateway` (`config/tools.json` `autostart`) | its own (`%LOCALAPPDATA%\hermes`) | 8642 (`HERMES_URL`) | `GET /health` (no auth), `GET /health/detailed` (bearer `API_SERVER_KEY`) | OpenRouter (its own model) |
+| nanoMuse (optional helper) | `Nanomuse\venv\Scripts\nanomuse.exe serve --config Nanomuse\data\config.toml` (`autostart`) | `Nanomuse\venv` (Python 3.11) | 8787 (`NANOMUSE_URL`) | `GET /api/health` (no auth), `GET /api/settings` (`llm_ready`, bearer = `<data_dir>/server_token`) | OpenRouter (its own model) |
 
 Environment variables `launch.py` passes to the core (from `settings.json`): `HANE_HOST`, `HANE_PORT`, `HANE_URL`
 (the brain), `AMIKA_CHAT_URL`, `YUMEHA_HOST`, `YUMEHA_PORT` (speech), `YUMEHA_MODEL` (`speech/models`),
@@ -120,11 +128,12 @@ Environment variables `launch.py` passes to the core (from `settings.json`): `HA
 block), `AMIKA_VLM_URL` (with vision on).
 
 **A voice turn**: mic PCM (browser) → `WS /ws/dialog` → Silero VAD + SenseVoiceSmall STT (speech) → brain
-`message` → surface four-liner (spoken at once) → tool phase if triggered → deep stream → `speech/hane_parser.py`
+`message` → surface four-liner (spoken at once) → deep stream → `speech/hane_parser.py`
 splits `[emotion]"sentence"` runs → one TTS request per sentence (`tts_request_gateway`, text `【happy2】.sentence`,
 voice adapter applied) → `tts_audio {audio_b64, emotion, pause_after}` to the browser → `ui/live2d-engine.js` plays the
 audio and fires the expression and motion at playback start → `tts_playing` / `tts_finished` acks drive barge-in →
-the memory writer archives the turn; reflection may open the next turn. Diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+the memory writer archives the turn; reflection may open the next turn. With tools on, the post-speech clerk runs
+once the turn's text is final and hands a helper only what she agreed to (§8.1). Diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/PROTOCOL.md). Voice contract:
 [docs/TTS.md](docs/TTS.md).
 
@@ -137,8 +146,8 @@ and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/P
 | `Tailscale_Serve_OpenAmika.bat` | maps `https://<machine>.<tailnet>.ts.net:8447/` to the speech port with Tailscale Serve (`off` removes it) |
 | `scripts/setup_windows.ps1` | Windows entry point: finds Python 3.11 (`py -3.11`, `python3.11`, `python`) and runs `scripts/setup_core.py` |
 | `scripts/setup_core.py` | her brain, ears, memory and eyes: `envs/brain`, `envs/speech`, `envs/embed`, `envs/vision`, SenseVoiceSmall, bge-m3, Qwen3-VL-2B (or the models an existing `settings.json` names), then `settings.json`, `brain/.env`; `--check`, `--cpu`, `--vision auto|on|off`, `--reinstall` |
-| `scripts/setup_tts.py` | her voice and Live2D model from Hugging Face (license prompt first) and the voice server in `vendor/tts-engine`; `--verify`, `--assets-only`, `--from-dir`, `--accept-voice-license`, `--cpu`, `--self-test` |
-| `scripts/MekaHime_Amika.manifest.json` | every file of `MekaHime/MekaHime_Amika` at the pinned revision with its size and SHA-256 (250 files) |
+| `scripts/setup_tts.py` | her voice, her Live2D model and the paper doll from Hugging Face (license prompt first) and the voice server in `vendor/tts-engine`; `--verify`, `--assets-only`, `--from-dir`, `--accept-voice-license`, `--skip-paper-doll`, `--cpu`, `--self-test` |
+| `scripts/MekaHime_Amika.manifest.json` | every file of `MekaHime/MekaHime_Amika` at the pinned revision with its size and SHA-256 (250 files, `VOICE_REV`), and in its `paper_doll` block the paper doll's 70 files (`live2d/Host/`, at `PAPER_DOLL_REV`) |
 | `scripts/download_sensevoice.py` | SenseVoiceSmall into `speech/models/` (6 files, SHA-256 pinned, ModelScope then Hugging Face; `--verify`) |
 | `settings.example.json` | template of `settings.json` (interpreters, ports, devices, TTS, embedder, vision, services) |
 | `.env.example` | template of `brain/.env` (secrets only; lists every variable the code reads) |
@@ -150,7 +159,7 @@ and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/P
 | `brain/f_usage.py`, `f_settle.py`, `f_controls.py`, `config/pricing.json` | per-call usage ledger, cost settlement, model and meter controls |
 | `brain/f_persona.py` | Setup page persona editing and the OpenRouter key endpoint (writes `brain/.env`) |
 | `brain/f_reset.py` | wipe her memory / reset everything (idle-only, with backups) |
-| `brain/f_tools.py`, `brain/iot_disclaimer.py` | the tools layer (MCP client, capability block, post-speech clerk, agent jobs); the IoT safety statement rules |
+| `brain/f_tools.py`, `brain/iot_disclaimer.py` | the tools layer (MCP client, capability block, post-speech clerk, agent jobs, agent health and autostart); the IoT safety statement rules |
 | `brain/embed_server.py` | local embedder (bge-m3 → 768 dims); `--check`, `--download` |
 | `brain/po_contract.py` = `speech/po_contract.py` | the shared output contract: emotion keys, SFX, parsing, template self-check |
 | `brain/表层.txt`, `例子.txt`, `思考.txt`, `scenes.json` (+ `brain/defaults/`) | her persona (§1) |
@@ -161,8 +170,8 @@ and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/P
 | `vision/vlm_service.py` | her eyes: a small local VLM describing the camera feed; `--check`, `--download` |
 | `messengers/service.py`, `core.py` | "Text her" on Discord / Telegram (`config/messengers.json`) |
 | `ui/` | the pages: `use.*` (stage, power, mic, telemetry, first-run wizard), `setup.*`, `tools.*`, `about.*`; `common.js` (nav, the health light), `live2d-engine.js` (Live2D playback, lipsync), `vendor/` (PixiJS, pixi-live2d-display, Live2D Cubism Core) |
-| `avatar/models/` | Live2D models, one folder each (`Amika/` from `setup_tts.py`); `avatar/retarget_motions.py` reuses motions on another model |
-| `servers/openamika-agents`, `servers/openamika-iot` | first-party MCP servers: task agents (Hermes Agent, nanoMuse) and the Zigbee smart home |
+| `avatar/models/` | Live2D models, one folder each (`Amika/` and the paper doll `Host/` from `setup_tts.py`); `avatar/retarget_motions.py` reuses motions on another model |
+| `servers/openamika-agents`, `servers/openamika-iot` | first-party MCP servers: task agents (Hermes Agent, nanoMuse: `adapters/hermes.py`, `adapters/nanomuse.py`) and the Zigbee smart home |
 | `IoT/` | Windows setup for the smart home (CP210x driver, mosquitto, a zigbee2mqtt serial patch) |
 | `config/` | non-secret settings: `build_f.json` (identity, her clock, memory budgets), `llm_roles.json`, `openrouter_models.json`, `alibaba_models.json`, `pricing.json`, `word_replace.json` (STT fixes, TTS pronunciations), `tools.example.json`, `messengers.example.json` |
 | `docs/` | `ARCHITECTURE.md`, `PERSONALITY.md`, `TTS.md`, `AVATAR.md`, `TOOLS.md`, `MESSENGERS.md`, `IOT_DISCLAIMER.md` |
@@ -175,6 +184,7 @@ and the interactive map at `/flow`. Socket protocol: [brain/PROTOCOL.md](brain/P
 |---|---|---|---|---|---|---|
 | **her voice**: `MekaHime_Amika.ckpt` (GPT), `MekaHime_Amika.pth` (SoVITS, v2ProPlus), `character.json`, `references/emotions.json` + 69 WAV clips, `README.md`, `LICENSE` | voice server | Hugging Face `MekaHime/MekaHime_Amika` @ `a3934e5a83dcb0192901f69536c66b837414e822`, every file outside `live2d/` | 75 files, 385 MB | `vendor/tts-engine/Speakers/MekaHime_Amika/` | size + SHA-256 of every file (`scripts/MekaHime_Amika.manifest.json`); clips for all 69 tags and the 67 adapter tags | `setup_tts.py` |
 | **her Live2D model**: `AmikaV4.model3.json`, `AmikaV4.moc3`, `AmikaV4.physics3.json`, `AmikaV4.cdi3.json`, `AmikaV4.8192/texture_00.png`, `texture_01.png`, 142 `*.motion3.json`, 25 `*.exp3.json`, `banks.json` | the Use page | same repository and revision, `live2d/Amika/` | 174 files, 88 MB | `avatar/models/Amika/` | size + SHA-256 of every file; every file the `.model3.json` names exists; an edited `banks.json` is kept (an unedited one follows a newer pin) | `setup_tts.py` |
+| **the paper doll** (her helpers' stand-in, MekaHime's folded-paper shrine doll): `host.model3.json`, `host.moc3` (Cubism 5), `host.physics3.json`, `host.cdi3.json`, `host.2048/texture_00.png`, 64 `*.motion3.json` (`idle` 15, `talk` 14, `listen` 7, `think` 6, `happy` 9, `worried` 6, `surprise` 7), `banks.json` (`"role": "agent"`, its place on the stage) | the Use page, beside her while a task agent is switched on (§8.1) | same repository, `live2d/Host/`, at its own revision `PAPER_DOLL_REV` (a placeholder until that revision is uploaded: then nothing is downloaded and its row says so) | 70 files, 2.3 MB | `avatar/models/Host/` | size + SHA-256 of every file (the manifest's `paper_doll` block); every file the `.model3.json` names exists; `banks.json` says `"role": "agent"`; an edited `banks.json` is kept | `setup_tts.py` |
 | SenseVoiceSmall (`model.pt`, `config.yaml`, `configuration.json`, `am.mvn`, `chn_jpn_yue_eng_ko_spectok.bpe.model`, `tokens.json`) | speech recognition | ModelScope `iic/SenseVoiceSmall`, fallback Hugging Face `FunAudioLLM/SenseVoiceSmall` (not `tokens.json`) | 937 MB | `speech/models/` | size + SHA-256 (`download_sensevoice.py`) | `setup_core.py` |
 | Silero VAD | voice activity | inside the `silero-vad` pip package | small | `envs/speech` | – | `setup_core.py` |
 | BAAI/bge-m3 | her memory's embeddings | Hugging Face `BAAI/bge-m3` | ~2.3 GB | the Hugging Face cache (`HF_HOME`, default `~/.cache/huggingface/hub`) | loaded once by `embed_server.py --download` | `setup_core.py` (else the first start) |
@@ -246,7 +256,7 @@ OpenAmika setup summary (909 s)
   -- brain/.env          created from .env.example; no OpenRouter key yet: the first-run wizard on the Use page takes it (or put it after OPENROUTER_API_KEY= in brain\.env); fully local with Ollama needs none
 ==============================================================================
 Done. Next:
-  1. envs\brain\Scripts\python.exe scripts\setup_tts.py   her voice and Live2D model (type yes to accept her license)
+  1. envs\brain\Scripts\python.exe scripts\setup_tts.py   her voice, her Live2D model and the paper doll (type yes to accept her license)
   2. .\Start_OpenAmika.bat                                start her; the page opens at http://localhost:53000
 ```
 
@@ -276,7 +286,7 @@ silenced). A second run with everything in place takes about a minute.
 - Verify without installing anything: `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 --check`
   (ends with `Her brain, ears, memory and eyes are installed.` or `Not ready: …`).
 
-### 5.3 Her voice and her Live2D model
+### 5.3 Her voice, her Live2D model and the paper doll
 
 ```powershell
 envs\brain\Scripts\python.exe scripts\setup_tts.py
@@ -285,18 +295,21 @@ envs\brain\Scripts\python.exe scripts\setup_tts.py
 First it prints the license summary and asks (only on an interactive console):
 
 ```
-[voice] Amika's voice and her Live2D model (https://huggingface.co/MekaHime/MekaHime_Amika) are free under MekaHime's personal-use license:
+[voice] Amika's voice, her Live2D model and the paper doll that stands in for her helpers (https://huggingface.co/MekaHime/MekaHime_Amika) are free under MekaHime's personal-use license:
           - personal, non-commercial use only, and you must be 18 or older
-          - no redistribution, re-hosting or resale of her voice, her Live2D model or their files
+          - no redistribution, re-hosting or resale of her voice, her Live2D model, the paper doll or their files
           - no training, fine-tuning or distilling other models on them
           - credit MekaHime visibly when you post videos or streams with her
           full text: https://huggingface.co/MekaHime/MekaHime_Amika/blob/main/LICENSE
 
-[voice] type yes to accept and download her voice and Live2D model (anything else skips them for now):
+[voice] type yes to accept and download her voice, her Live2D model and the paper doll (anything else skips them for now):
 ```
 
-The person types `yes` (`y` works; anything else declines, and the rest still installs). Then, in this order: her
-voice and Live2D model, file by file with the standard library only (so they never depend on torch), then the voice
+The person types `yes` (`y` works; anything else declines, and the rest still installs). It is asked when her
+voice, her model or the paper doll is missing; the paper doll counts only when it can be downloaded in this run (its
+revision is pinned, see below), so an install that pulls a newer OpenAmika is asked again for it. Then, in this
+order: her voice, her Live2D model and the paper doll, file by file with the standard library only (so they never
+depend on torch), then the voice
 server: `vendor/tts-engine/.venv` (torch 2.9.1 + `requirements-tts.txt`), GPT-SoVITS at its pinned commit, the
 pretrained models, language ID, G2PW, nltk data, ffmpeg, an import probe, the Japanese dictionary,
 `vendor/tts-engine/install.json` (records the revision and when the license was accepted), and a check that
@@ -307,6 +320,7 @@ pretrained models, language ID, G2PW, nltk data, ffmpeg, an import probe, the Ja
 OpenAmika voice setup summary (402 s)
   OK voice MekaHime_Amika  ...\vendor\tts-engine\Speakers\MekaHime_Amika (downloaded 75 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 75 files verified; 69/69 emotion tags with a clip; all 67 tags OpenAmika's voice adapter can send have one)
   OK Live2D model Amika    ...\avatar\models\Amika (downloaded 174 file(s) from MekaHime/MekaHime_Amika@a3934e5a; 174 files verified; AmikaV4.model3.json, 142 motions, 25 expressions)
+  OK paper doll Host       ...\avatar\models\Host (downloaded 70 file(s) from MekaHime/MekaHime_Amika@<PAPER_DOLL_REV[:8]>; 70 files verified; host.model3.json, 64 motions, 0 expressions; stands in for her helpers on the Use page while a task agent is on)
   OK venv                  ...\vendor\tts-engine\.venv\Scripts\python.exe (Python 3.11.9, created)
   OK torch                 torch 2.9.1+cu128 / torchaudio 2.9.1+cu128 (installed)
   OK packages              requirements-tts.txt (installed)
@@ -325,9 +339,18 @@ Done. Next:  .\Start_OpenAmika.bat   (or double-click it: her voice server start
 
 - Unattended (an agent's terminal has no console): ask the person to accept the terms first, then
   `envs\brain\Scripts\python.exe scripts\setup_tts.py --accept-voice-license`. Without a console and without that flag,
-  both rows read `!! … not downloaded: her license was not accepted (…)` and nothing of hers is downloaded. (A
+  the rows read `!! … not downloaded: her license was not accepted (one license covers her voice, her Live2D model
+  and the paper doll) …` and nothing of hers is downloaded. (A
   terminal whose input is the null device, as an agent's often is, counts as a console on Windows: the prompt is
   printed, reads end-of-input at once and counts as no.)
+- The paper doll has a revision of its own, `PAPER_DOLL_REV` in `scripts/setup_tts.py` (its 70 pins are in the
+  manifest's `paper_doll` block; her voice and model stay at `VOICE_REV`). While that constant is empty (before
+  `live2d/Host/` is on Hugging Face) nothing of the doll is requested, the run still succeeds, and its row reads
+  `-- paper doll Host  not downloaded: this OpenAmika does not pin the revision of MekaHime/MekaHime_Amika that adds
+  live2d/Host/ yet (PAPER_DOLL_REV in scripts/setup_tts.py is empty). …`; a doll already in place is still checked
+  against the pins (`OK … existing; 70 files verified against the pinned list`), and `--from-dir <copy>` installs
+  it from a local copy laid out like the repository. Never fill that constant in yourself: it is the commit of
+  MekaHime's own upload (§11).
 - While `MekaHime/MekaHime_Amika` is private: `$env:HF_TOKEN = "hf_..."` in the same PowerShell window first. Without
   it the rows read `!! voice MekaHime_Amika  Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is
   not public yet. …`. A refusal or a network failure is also printed the moment it happens (`[setup] !! her voice: …`),
@@ -336,15 +359,18 @@ Done. Next:  .\Start_OpenAmika.bat   (or double-click it: her voice server start
   checked against the manifest, and no token is sent to the mirror.
 - No NVIDIA GPU: `--cpu`. Only her files, no voice server: `--assets-only`. Offline, from a copy laid out like the
   repository: `--from-dir <folder>` (still checked file by file against the manifest). Skip one: `--skip-voice`,
-  `--skip-avatar`. Download again: `--update-voice`, `--update-avatar`. Run the server once and speak a line:
-  `--self-test`.
-- `avatar/models/Amika/banks.json` (Setup → Avatar edits it): once edited it is kept (`your banks.json kept`); while
-  it is still the copy the setup installed, a newer pin replaces it (the installed SHA-256 is remembered in
-  `vendor/tts-engine/.openamika-verified.json`).
+  `--skip-avatar`, `--skip-paper-doll`. Download again: `--update-voice`, `--update-avatar` (her model and the paper
+  doll). Elsewhere: `--avatar-dir`, `--paper-doll-dir` (default `avatar/models/Host`). Run the server once and speak
+  a line: `--self-test`.
+- `avatar/models/Amika/banks.json` (Setup → Avatar edits it) and `avatar/models/Host/banks.json`: once edited it is
+  kept (`your banks.json kept`); while it is still the copy the setup installed, a newer pin replaces it (the
+  installed SHA-256 is remembered in `vendor/tts-engine/.openamika-verified.json`). The doll's must keep `"role":
+  "agent"` (else `!! paper doll Host  … its banks.json does not say "role": "agent" …`: delete it and run again).
 - Verify (downloads and installs nothing; fast, because hashes are cached by size and modification time in
   `vendor/tts-engine/.openamika-verified.json`, which it refreshes):
-  `envs\brain\Scripts\python.exe scripts\setup_tts.py --verify` → `Verified: her voice and Live2D model and the voice
-  server are complete.` or one `!!` row per broken part, naming the files.
+  `envs\brain\Scripts\python.exe scripts\setup_tts.py --verify` → `Verified: her voice, her Live2D model, the paper
+  doll and the voice server are complete.` (without the doll while it is not installed) or one `!!` row per broken
+  part, naming the files.
 - A re-run of a complete install downloads nothing and takes about half a minute; an interrupted download resumes
   from its `.part` file.
 
@@ -483,10 +509,12 @@ envs\brain\Scripts\python.exe launch.py --check     # starts nothing; one OK / -
 `OK her clock  Asia/Tokyo · Wed 14:04 JST`, `OK brain port  5202 free` (or, while she runs, `OK brain port
 5202 held by this OpenAmika (running)`), `-- TTS (voice)  not running — will be started
 (vendor\tts-engine\.venv\Scripts\python.exe)`, `OK her voice  MekaHime_Amika · 69/69 emotion clips`,
-`OK Live2D model  Amika (AmikaV4.model3.json, 142 motions)`, `OK brain_python imports  all importable`,
+`OK Live2D model  Amika (AmikaV4.model3.json, 142 motions)`, `OK paper doll  Host · 64 motions — shown beside her
+while a task agent is switched on (Tools page)`, `OK brain_python imports  all importable`,
 `OK embedder check  embed_server check: torch …`, `OK vision check  vision check: all importable (…)`, then a count
 line and `result: ready` (exit 0) or `result: fix the !! lines above (-- lines are informational)` (exit 1). Rows for
-Ollama appear when a role runs on it (§5.4). The same report is saved to `logs/preflight.json` and shown on the Setup
+Ollama appear when a role runs on it (§5.4), rows for her helpers when one is switched on (`agent hermes`, `hermes
+key`, `agent nanomuse`, §8.1). The same report is saved to `logs/preflight.json` and shown on the Setup
 page and in the health light.
 
 `Start_OpenAmika.bat` opens a console titled OpenAmika with a dashboard that redraws in place: the pre-flight
@@ -559,17 +587,21 @@ workspace in `config/alibaba_models.json`), `GEMINI_API_KEY` (legacy embedder), 
 `presets`, `selections` for `surface` / `deep` / `reflection` / `memory_write`; Setup → Brain edits it),
 `openrouter_models.json` / `alibaba_models.json` / `pricing.json` (catalogs and prices; Ollama is priced at 0),
 `word_replace.json` (`stt_to_llm` fixes, `llm_to_tts` pronunciations incl. the wizard's `role: user_name` rule),
-`tools.json` (git-ignored; MCP servers, policies, `clerk_role`, `iot_disclaimer`; template `tools.example.json`),
+`tools.json` (git-ignored; MCP servers, the helpers' URLs, keys and `autostart`, policies, `clerk_role`,
+`iot_disclaimer`; template `tools.example.json`; §8.1),
 `messengers.json` (git-ignored; bot tokens and allow-lists; template `messengers.example.json`), `ollama.json`
 (git-ignored), `voice_map.json` (git-ignored; voice adapter edits).
 
 ## 7. The page
 
-`http://localhost:53000` (`chat_port`) redirects to `/use`. Pages: **Use** (`/use`: the Live2D stage, power, mic,
-text box, camera button, model picker, cost and latency telemetry, the first-run wizard), **Setup** (`/setup`:
+`http://localhost:53000` (`chat_port`) redirects to `/use`. Pages: **Use** (`/use`: the Live2D stage, with the paper
+doll beside her while a task agent is on, power, mic, text box, camera button, model picker, the **Her helpers**
+card (jobs in flight; Approve / Deny / Answer / Stop for anything waiting on the person), the **Tool dialogue**
+card (Professional), cost and latency telemetry, the first-run wizard), **Setup** (`/setup`:
 system health, startup checks, brain and models, voice adapter grid, avatar banks, personality, vision, "Text her",
-danger zone: wipe her memory / reset everything; Simple and Professional modes), **Tools** (`/tools`: MCP servers,
-per-tool policies `auto` / `confirm` / `deny`, approvals, the IoT switch and its safety statement), **About**
+danger zone: wipe her memory / reset everything; Simple and Professional modes), **Tools** (`/tools`: MCP servers
+and task agents with their health, Start and Test; per-tool policies `auto` / `confirm` / `deny`, Add a server and
+Raw config (tools.json) in Professional mode; the IoT switch and its safety statement), **About**
 (`/about`: MekaHime, supporting the project, licenses), and `/flow` (the interactive architecture map).
 
 The light at the top right of every page (`ui/common.js`, `healthCheck`) is green *System Ready*, yellow *Warnings*
@@ -586,10 +618,11 @@ Not installed by the setup; the core runs without them.
 
 - **Tools / MCP** ([docs/TOOLS.md](docs/TOOLS.md)): `config/tools.json`, edited on the Tools page. New servers start
   disabled. She decides in character; a post-speech "clerk" call turns what she agreed to into tool calls, each tied
-  to a verbatim quote of the person's request; `confirm` tools wait for the person's approval on the Tools page.
-- **Task agents** ([servers/openamika-agents/README.md](servers/openamika-agents/README.md)): Hermes Agent and
-  nanoMuse as `ask / status / answer / stop` tools; their URLs and keys live in their `env` blocks in
-  `config/tools.json`.
+  to a verbatim quote of the person's request; `confirm` tools wait for the person's approval on the Use page.
+- **Task agents** (§8.1, [docs/TOOLS.md](docs/TOOLS.md),
+  [servers/openamika-agents/README.md](servers/openamika-agents/README.md)): Hermes Agent and nanoMuse as
+  `ask / status / answer / stop` tools, with the paper doll standing in for them on her stage; their URLs, keys and
+  start commands live in their entries in `config/tools.json`.
 - **Smart home** ([IoT/README.md](IoT/README.md), [docs/IOT_DISCLAIMER.md](docs/IOT_DISCLAIMER.md)): Zigbee plugs via
   mosquitto + zigbee2mqtt + `servers/openamika-iot`. Until the current IoT safety statement is accepted on the Tools
   page, the brain refuses to start or connect any smart-home server, the launcher holds back `services.mqtt` and
@@ -603,6 +636,113 @@ Not installed by the setup; the core runs without them.
   one 72–96 GB; otherwise Ollama on a second PC (Setup → Brain takes its URL), or, in almost every case the better
   answer, Semi-Local. Fully Local is slower too (§5.4, *How fast*).
 - **Phone**: `Tailscale_Serve_OpenAmika.bat` (needs Tailscale with MagicDNS + HTTPS); one conversation tab at a time.
+  Every page it serves includes the Tools page, whose raw editor shows `config/tools.json` with the helpers' keys.
+
+### 8.1 Her helpers: Hermes Agent, nanoMuse and the paper doll
+
+Separate programs the person installs (Hermes Agent: MIT, Nous Research; nanoMuse: GPL-3.0-or-later); OpenAmika
+talks to them over HTTP through `servers/openamika-agents` and never bundles them. The human tutorial is README
+"Her helpers" and [docs/TOOLS.md](docs/TOOLS.md). Rule 4 covers every key here: generate a key into a variable,
+never echo it, never pass a literal key on a command line, never print `config/tools.json` or a helper's `.env`
+back. Rule 2's spirit covers approvals: only the person answers a helper's approval or question (their spoken yes,
+quote-checked, or the Use page's buttons); never call `POST /api/build_f/tools/approve` or `/job` for them.
+
+**Hermes Agent** (tested: 0.22.4, stable channel; Windows, a normal PowerShell window):
+
+```powershell
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)   # HERMES_HOME = %LOCALAPPDATA%\hermes; hermes on the user PATH
+# a new window, then:
+hermes model                                                  # interactive: OpenRouter, the person's key, z-ai/glm-5
+$key = [guid]::NewGuid().ToString('N')                        # 32 hex characters
+hermes config set API_SERVER_ENABLED true                     # both go to %LOCALAPPDATA%\hermes\.env
+hermes config set API_SERVER_KEY $key
+hermes config set browser.headed true                         # optional: a visible browser (config.yaml)
+hermes config set AGENT_BROWSER_HEADED true                   # optional, needed on Windows for that (.env)
+```
+
+- Hermes 0.22.4 opens its API server (`127.0.0.1:8642`; `API_SERVER_HOST`, `API_SERVER_PORT`) when
+  `API_SERVER_KEY` is usable: 16 characters or more and not a placeholder (`hermes_cli.auth.has_usable_secret`,
+  min_length 16). Otherwise the gateway runs without it and logs nothing about it. Every route but `GET /health`
+  needs `Authorization: Bearer <API_SERVER_KEY>`; a wrong one gets 401 `Invalid gateway API key (API_SERVER_KEY)`.
+- Check by hand: `hermes gateway` (foreground), then `Invoke-RestMethod http://127.0.0.1:8642/health` → status `ok`,
+  and Hermes's `%LOCALAPPDATA%\hermes\logs\gateway.log` has `[Api_Server] API server listening on
+  http://127.0.0.1:8642 (model: hermes-agent)`. Ctrl+C; OpenAmika starts it from then on. Diagnostics: `hermes doctor`.
+- Its data (`.env`, `config.yaml`, `auth.json`, `state.db`, `memories/`, `sessions/`, `logs/`) stays in its home.
+  `Auxiliary Nous client unavailable` warnings are harmless with OpenRouter (the launcher hides them).
+
+**nanoMuse** (tested: 1.0.9; its Python runtime `nanomuse serve`, not the nanoMuse Desktop app; not on PyPI), from the
+OpenAmika folder (`Nanomuse/` is git-ignored):
+
+```powershell
+git clone --depth 1 https://github.com/nano-muse/nanoMuse.git Nanomuse\repo
+py -3.11 -m venv Nanomuse\venv
+Nanomuse\venv\Scripts\python -m pip install -e "Nanomuse\repo[browser]"   # ~1 min, venv ~310 MB
+Nanomuse\venv\Scripts\python -m playwright install chromium               # ~440 MB in %LOCALAPPDATA%\ms-playwright
+mkdir Nanomuse\data                                                       # then write Nanomuse\data\config.toml
+Nanomuse\venv\Scripts\nanomuse vault set OPENROUTER_API_KEY --config Nanomuse\data\config.toml   # hidden prompt: the person types the key
+```
+
+- `config.toml` (TOML: forward slashes in paths): `data_dir = "C:/OpenAmika/Nanomuse/data"` (absolute: nanoMuse
+  resolves a relative one from its working folder, and `vault set` writes `vault.enc` / `vault.key` there);
+  `[llm] provider = "openai"`, `base_url = "https://openrouter.ai/api/v1"`, `model = "z-ai/glm-5"`,
+  `api_key = "{{vault:OPENROUTER_API_KEY}}"`; `[agent] instructions` (who it works for; the bridge has no
+  per-run instructions for nanoMuse); `[sandbox] mode = "off"`; `[browser] enabled = true`, `headless = false`;
+  `[cloud] required = false`, `sync = false`, `models = false`; `[hub] enabled = false`; `[server] host =
+  "127.0.0.1"`, `port = 8787`, `approval_timeout = 600`. The full file is in docs/TOOLS.md.
+- Not `api_key = "${OPENROUTER_API_KEY}"`: `launch.py` starts nanoMuse before the brain and never loads
+  `brain/.env`, so nanoMuse would start with no key ("No model yet"), answer every route, and fail every task.
+  `vault set --value` exists but puts the key on a command line: do not use it.
+- Check by hand: `Nanomuse\venv\Scripts\nanomuse serve --config Nanomuse\data\config.toml --no-qr --host 127.0.0.1
+  --port 8787` → `nanoMuse … is ready.`, and `Nanomuse\data\server_token` exists (written on the first start; the
+  printed link carries it: never repeat it). Exit code 98 = port 8787 taken; 78 = security software intercepting
+  loopback. A model chosen in nanoMuse's own web app (`<data_dir>\app-settings.json`) overrides `config.toml`.
+
+**`config/tools.json`** (git-ignored; `Copy-Item config\tools.example.json config\tools.json` when it does not exist,
+else merge the two entries into its `mcpServers`; the Tools page's Raw config, Professional mode, edits the same
+file; the brain re-reads it within 30 s, a Tools-page save at once; the launcher reads it at start):
+
+| key | example value | meaning |
+|---|---|---|
+| `enabled` (top level) | `true` | the master switch, "Tools enabled" on the Tools page |
+| `mcpServers.<name>.command` / `args` / `cwd` | `python` / `["-m", "openamika_agents", "hermes"]` (or `"nanomuse"`) / `../servers/openamika-agents` | the bridge: `python` = the brain's interpreter, `cwd` relative to `brain/`; nothing to `pip install` |
+| `….enabled`, `….kind` | `true`, `"agent"` | the card's switch; `kind: agent` makes it a helper and seats the paper doll |
+| `….autostart` (hermes) | `{"command": "%LOCALAPPDATA%/hermes/bin/hermes.exe", "args": ["gateway"], "cwd": "%LOCALAPPDATA%/hermes"}` | the helper's own start command; `%VARIABLES%` are expanded, a relative path is taken from the OpenAmika folder (launcher and brain alike); a string with quotes around a spaced path works too |
+| `….autostart` (nanomuse) | `{"command": "C:/OpenAmika/Nanomuse/venv/Scripts/nanomuse.exe", "args": ["serve", "--config", "C:/OpenAmika/Nanomuse/data/config.toml", "--no-qr", "--host", "127.0.0.1", "--port", "8787"], "cwd": "C:/OpenAmika/Nanomuse/data", "env": {"PYTHONUTF8": "1"}}` | change `C:/OpenAmika` when the folder is elsewhere |
+| `env.HERMES_URL`, `env.HERMES_API_KEY` | `http://127.0.0.1:8642`, = `API_SERVER_KEY` | the key is sent as a bearer on every call |
+| `env.HERMES_SESSION` | `openamika` | one continuing conversation; a session a copied Hermes home refuses (409 `profile_mismatch`) is replaced once by `openamika-<pc>` |
+| `env.HERMES_PROVIDER`, `env.HERMES_MODEL` | `openrouter`, `z-ai/glm-5` | must match `hermes model`; they price the token totals Hermes reports (ledger phase `agent:hermes`, an estimate) |
+| `env.HERMES_INSTRUCTIONS`, `env.HERMES_SURFACE_BROWSER` | the example's text; unset (= on) | sent with every run; `0` stops raising Hermes's browser window |
+| `env.NANOMUSE_URL`, `env.NANOMUSE_TOKEN_FILE` (or `NANOMUSE_TOKEN`) | `http://127.0.0.1:8787`, `C:/OpenAmika/Nanomuse/data/server_token` | the token file is read again until it exists |
+| `env.NANOMUSE_LANGUAGE`, `env.NANOMUSE_THREAD` | `en` (`ja`, `zh-CN`), unset (= `OpenAmika`) | its reply language; the one thread the bridge uses |
+| `….persona_note` | Chinese, `{user_name}` | what she is told about the helper |
+
+**What runs.** `launch.py` starts each enabled agent's `autostart` with the services (hidden, output to
+`logs/agent-<name>.log`, health-gated up to 90 s on `HERMES_URL/health` or `NANOMUSE_URL/api/health`, recorded in
+`logs/instance.json` so `Stop_OpenAmika` stops it; one already running is used as is). The brain spawns one bridge
+per enabled agent over stdio, probes its `health` every 30 s and before every `ask`, relaunches a helper that is
+down (detached, so it outlives the brain; 90 s grace, at least 120 s apart, at most 3 tries until the Tools page's
+**Start**), and polls jobs every 2.5 s. A job ends after 900 s at most (`--timeout N` in the entry's `args`); an
+approval or question nobody answers is stopped after 30 minutes.
+
+**Verify** (read, never print keys):
+- `envs\brain\Scripts\python.exe launch.py --check`: `OK agent hermes  online at http://127.0.0.1:8642` (or `--
+  agent hermes  not running — will be started (…)`), `OK hermes key  HERMES_API_KEY is the API_SERVER_KEY in
+  …\.env`, `OK agent nanomuse  online at http://127.0.0.1:8787`, `OK paper doll  Host · 64 motions — stands in for her
+  helpers on the Use page`.
+- While she runs: `GET http://127.0.0.1:53000/api/build_f/tools` → `servers.hermes.kind == "agent"`,
+  `servers.hermes.health.ok == true` (`reason`, `detail`, `version`). Its `config` field is the raw `tools.json`
+  with the keys: read `servers` only. `GET http://127.0.0.1:53000/api/avatar/models` lists `Host` with `"role":
+  "agent"` and `"stage": {"scale": 0.42, "nx": 0.84, "ny": 0.7, "head_y": 0.26}`; the Use page's browser console
+  logs `[Live2D] agent avatar Host ready (64 motions)`.
+
+**The paper doll on the Use page** (`ui/use.js` polls `/api/build_f/tools` every 2 s while connected, 10 s
+otherwise; `ui/live2d-engine.js` draws it): seated bottom-right when the top-level `enabled` is true and any
+enabled server is `kind: agent` (healthy or not), after her own model has loaded; gone when none is. Its base motion
+is `think*` while any job is not finished, else `idle*`. Each new line of the tool dialogue becomes a bubble: hers
+(who `amika`: the command she typed, her answers) out of her while the doll plays `listen*`; the helper's (who
+`agent`) out of the doll with `talk*`, or the line's mood: `happy*` on a result, `worried*` on an error or a stop,
+`surprise*` on a question or an approval. Without a `role: agent` model there is no doll and no helper bubbles; the
+**Her helpers** card and (Professional) the **Tool dialogue** card still show everything.
 
 ## 9. Troubleshooting
 
@@ -630,16 +770,17 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
 - `WARNING: this folder is synced by OneDrive` / `… is N characters long. Windows cannot load some program files
   (DLLs) …` / `Windows long paths are off` → move the folder (for example to `C:\OpenAmika`) and run again.
 
-**Her voice and Live2D model (`setup_tts.py`)**
+**Her voice, her Live2D model and the paper doll (`setup_tts.py`)**
 
-- `!! voice MekaHime_Amika  not downloaded: her license was not accepted …` (also `!! Live2D model Amika …`) → the
-  person must type `yes` (§0 rule 2), or `--accept-voice-license` after they accepted.
+- `!! voice MekaHime_Amika  not downloaded: her license was not accepted …` (also `!! Live2D model Amika …`,
+  `!! paper doll Host …`) → the person must type `yes` (§0 rule 2), or `--accept-voice-license` after they accepted.
 - `… Hugging Face refused the download (HTTP 401): MekaHime/MekaHime_Amika is not public yet …` → set `HF_TOKEN` to a
   read token of an account with access; `… did not accept your Hugging Face token (from HF_TOKEN) (HTTP 401) …` → the
   token is wrong or expired; `… the account of your Hugging Face token … cannot read MekaHime/MekaHime_Amika (HTTP 403|404)`
   → that account has no access.
 - `… Hugging Face has no <file> at revision a3934e5a of MekaHime/MekaHime_Amika (HTTP 404 …): update OpenAmika (git pull)`
-  → the pinned revision changed upstream; update the checkout (§5.7).
+  → the pinned revision changed upstream; update the checkout (§5.7). For the paper doll the revision named is
+  `PAPER_DOLL_REV`'s.
 - `… download failed after 4 tries: <url>: <error>. Check the internet connection …` → run again; it resumes. If
   huggingface.co is blocked where the person is, set `HF_ENDPOINT` to a mirror (§5.3).
 - `… SHA-256 mismatch … The file at that address is not the pinned one. Files already in place are kept …` → the
@@ -693,6 +834,50 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
   the setup without `--check`.
 - `vision  exited …` → out of VRAM is the usual cause: `"vision": {"enabled": false}` or a smaller model.
 
+**Her helpers (§8.1)** — the pre-flight rows, the Tools card's tag and detail (also in `logs/brain.log` as
+`[tools] <name>: UNREACHABLE — <detail>`), and what she relays:
+
+- `-- hermes key  API_SERVER_KEY in <home>\.env is missing, shorter than 16 characters or a placeholder, so Hermes
+  never opens its API server and she cannot reach it — …` → the person sets a key (§8.1), then **Start** on the card.
+  The Hermes home is found from the autostart's env `HERMES_HOME`, its `cwd`, the folder above `bin\hermes.exe`,
+  `HERMES_HOME`, then `%LOCALAPPDATA%\hermes`; a key set in `config.yaml` (`gateway.api_server`) is not checked.
+- `-- hermes key  HERMES_API_KEY in config/tools.json is not set yet: …` (the example's placeholder) or `-- hermes key
+  tools.json HERMES_API_KEY differs from API_SERVER_KEY in <home>\.env — Hermes will reject her` → make them equal,
+  without printing either; the card says `Hermes is running but rejects the API key (HERMES_API_KEY in
+  config/tools.json must equal API_SERVER_KEY in the .env of the Hermes home, %LOCALAPPDATA%\hermes\.env by
+  default)`.
+- `!! agent hermes|nanomuse  not running, and its start command does not exist: <path> — install it, or fix
+  "autostart" in config/tools.json` → install it (§8.1) or correct the path. `!! agent …  not running at <url> and no
+  autostart configured (Tools page)` → add `autostart` or start it by hand. `-- agent …  not running — will be started
+  (…)` is informational and turns green when it answers.
+- Card `agent unreachable`: ``Hermes: nothing answers at http://127.0.0.1:8642/health (…) — is `hermes gateway`
+  running, with an API_SERVER_KEY of 16 or more characters in its .env? …`` → not running, or running without its
+  API server (no `[Api_Server] API server listening …` in its `logs\gateway.log`): the key rule above.
+  ``nanoMuse: nothing answers at http://127.0.0.1:8787/api/health (…) — is `nanomuse serve` running?`` → read
+  `logs/agent-nanomuse.log` (exit code 98: port 8787 taken; `config.toml is not valid TOML`: backslashes).
+- Card `agent starting…` (`starting <name> (Ns): <command>`) → wait, up to 90 s. Card `start failed`: `could not start
+  <name>: FileNotFoundError …`, `<command> exited with code N — see logs/agent-<name>.log`, or `<name> did not come up
+  after 3 start attempts (…) — see logs/agent-<name>.log; press Start to try again` → read that log.
+- Card `agent refusing tasks`: `Hermes <v> is running but refused the last task (Hermes refused POST /v1/runs: HTTP
+  429|409|503 …); check the Hermes gateway and HERMES_SESSION — a task it accepts clears this` → wait (it also clears
+  after 10 minutes). A card note `Hermes refused the configured session 'openamika' (profile_mismatch: it was created
+  by another Hermes install); using session 'openamika-<pc>' on this install instead` needs nothing.
+- Card green, yet every Hermes task fails (she relays Hermes's error) → its model: `hermes model`, `hermes doctor`,
+  `%LOCALAPPDATA%\hermes\logs\errors.log`.
+- Card `agent has no model`: `nanoMuse <v> is running but has no working model: its [llm] api_key is empty or
+  unresolved (…)`, or a nanoMuse job failed with `The model provider refused the API key. Check it under Connections.
+  (nanoMuse's model key is missing or wrong: see docs/TOOLS.md)` → the person runs `vault set` again (§8.1) and
+  `api_key = "{{vault:OPENROUTER_API_KEY}}"` stays in `config.toml`. `nanoMuse is running but rejects the token
+  (NANOMUSE_TOKEN / NANOMUSE_TOKEN_FILE should hold <data_dir>/server_token)` → point the entry at that file.
+- A job failed `timed out waiting for Hermes` / `… nanoMuse` → 900 s passed (often an unanswered approval).
+  She says she could not reach a helper ("联系不上") only for a connection error; a helper's own refusal is relayed
+  with its reason.
+- `-- paper doll  a task agent is switched on, but avatar/models/ has no paper doll (…)` → `setup_tts.py` installs it
+  (§5.3). `-- paper doll Host  not downloaded: this OpenAmika does not pin the revision …` (setup summary) → expected
+  until `PAPER_DOLL_REV` is set by MekaHime's release; update OpenAmika later. `OK paper doll` but no doll on stage →
+  the top-level `enabled` or the helper's `enabled` is false, or her own model did not load (the doll is seated
+  after it).
+
 **The page**
 
 - Stage shows `No Live2D model yet` → §5.3, then reload. `Model failed to load` → `setup_tts.py --verify` names the
@@ -711,13 +896,17 @@ envs\brain\Scripts\python.exe -m pip install -r requirements-dev.txt
 envs\brain\Scripts\python.exe -B -m pytest tests -k "not live" -p no:cacheprovider -q
 ```
 
-About 460 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
-ledger, the control proxies, the tools clerk, the IoT safety statement, the launcher pre-flight
-(`tests/test_launch_preflight.py`: a fresh checkout, Ollama, a foreign voice server on her port, her own running
-ports, the time-zone database), `setup_core.py` (`tests/test_setup_core.py`: a re-run after an interrupted first run,
+About 490 offline tests: the output contract and both streaming parsers (parity), prompt assembly, memory, the usage
+ledger, the control proxies, the tools clerk (with agent autostart and health), the agents bridge against in-process
+fakes of Hermes and nanoMuse (`tests/test_agents_bridge.py`: jobs, approvals, questions, stop, health with
+`no_model` and `refused`, the copied-home session fallback, a real MCP stdio round trip), the IoT safety statement,
+the launcher pre-flight (`tests/test_launch_preflight.py`: a fresh checkout, Ollama, a foreign voice server on her
+port, her own running ports, the time-zone database, the helpers' start commands, Hermes's key, the paper doll, the
+shipped `tools.example.json`), `setup_core.py` (`tests/test_setup_core.py`: a re-run after an interrupted first run,
 damaged packages), the SenseVoice downloader, and `setup_tts.py` against a local stand-in for Hugging Face
 (`tests/test_setup_tts.py`: public, private with and without a token, the CDN and a mirror never seeing the token,
-resume, verify, repair, `--from-dir`, banks.json). Replay tests that need MekaHime's archived corpora skip
+resume, verify, repair, `--from-dir`, banks.json, the paper doll at its own revision and before it is pinned).
+Replay tests that need MekaHime's archived corpora skip
 themselves. GitHub Actions runs the same command on Windows with Python 3.11 (`.github/workflows/tests.yml`). The
 tests resolve their temp folders, so an 8.3 short `TEMP` (a long Windows user name) is fine. On an install in use the
 suite passes too: the tests that guard what ships (the neutral identity in `config/build_f.json`, the OpenRouter
@@ -734,8 +923,18 @@ there is never a reason to touch the person's files.
   `speech/tts_emotion.py`, the Live2D banks and the tests.
 - **A new revision of her Hugging Face repository** (maintainers): from a local copy of the new revision,
   `python scripts\setup_tts.py --write-manifest <folder> --voice-revision <commit>` rewrites
-  `scripts/MekaHime_Amika.manifest.json`; set `VOICE_REV` in `scripts/setup_tts.py` to the same commit (the script
-  refuses a mismatch); run the tests.
+  `scripts/MekaHime_Amika.manifest.json` (`live2d/Host/` goes into its `paper_doll` block, kept as it is when the
+  copy has none); set `VOICE_REV` in `scripts/setup_tts.py` to the same commit (the script refuses a mismatch), and
+  `PAPER_DOLL_REV` too when the copy holds `live2d/Host/`; run the tests.
+- **The paper doll's first upload** (maintainers, with MekaHime's token): its 70 files are already pinned (the
+  manifest's `paper_doll` block). After uploading exactly those files to `live2d/Host/` of `MekaHime/MekaHime_Amika`,
+  set `PAPER_DOLL_REV` to the full 40-character commit of that upload, and run
+  `setup_tts.py --assets-only --skip-voice --skip-avatar --accept-voice-license` (with `HF_TOKEN` while the
+  repository is private): `OK paper doll Host  … downloaded 70 file(s) … 70 files verified`. Optionally move
+  everything to that one revision with `--write-manifest` (above).
+- **Another agent avatar**: a model folder whose `banks.json` says `"role": "agent"` (docs/AVATAR.md); only the first
+  such folder by name is used, so to use your own, delete `avatar/models/Host/` and run `setup_tts.py` with
+  `--skip-paper-doll` from then on.
 - **Another voice or server**: a speaker folder in `vendor/tts-engine/Speakers/` (`character.json`, weights,
   `references/emotions.json`) or any server speaking the contract in [docs/TTS.md](docs/TTS.md); point `tts_url` /
   `services.tts` at it.

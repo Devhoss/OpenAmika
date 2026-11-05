@@ -67,7 +67,7 @@ research, a browser, a terminal, files. Tested with Hermes Agent 0.22.4.
 4. **Optional, to watch it work** in a visible browser window: `hermes config set browser.headed true` and
    `hermes config set AGENT_BROWSER_HEADED true` (on Windows Hermes keeps its browser hidden without the second).
    To try it by hand: `hermes gateway` in one window, then `Invoke-RestMethod http://127.0.0.1:8642/health` in
-   another answers `status: ok`. Stop it with Ctrl+C: OpenAmika starts it from now on.
+   another shows status `ok`. Stop it with Ctrl+C: OpenAmika starts it from now on.
 5. **Connect it** (see *Connect them to OpenAmika* below): in `config\tools.json` set the top-level `"enabled"`
    and the `hermes` entry's `"enabled"` to `true`, and paste the key from step 3 as `"HERMES_API_KEY"`. Its
    `"autostart"` already points at `%LOCALAPPDATA%\hermes\bin\hermes.exe gateway`. Keep `HERMES_PROVIDER` and
