@@ -288,7 +288,10 @@
       const startFailed = agentDown && health.reason === "start_failed";
       const refusing = agentDown && health.reason === "refused";      // up and authenticated, but it would not take her last task
       const noModel = agentDown && health.reason === "no_model";      // up, but its own model has no working key
-      const canStart = server.kind === "agent" && server.enabled && server.autostart && agentDown && !starting;
+      // Start only for an agent that is not up: one that answers (refusing tasks, no model, a rejected key) is running
+      // already, and a second copy would only fail on its port
+      const canStart = server.kind === "agent" && server.enabled && server.autostart && agentDown && !starting
+        && !refusing && !noModel && health.reason !== "unauthorized";
       const head = el("div", { class: "server-head" },
         el("span", { class: "dot " + (!server.enabled ? "" : !server.connected ? "warn" : starting ? "warn" : agentDown ? "err" : "ok") }),
         el("span", { class: "name", text: name }),

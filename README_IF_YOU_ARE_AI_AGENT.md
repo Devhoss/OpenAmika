@@ -838,7 +838,10 @@ Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.
 `[tools] <name>: UNREACHABLE — <detail>`), and what she relays:
 
 - `-- hermes key  API_SERVER_KEY in <home>\.env is missing, shorter than 16 characters or a placeholder, so Hermes
-  never opens its API server and she cannot reach it — …` → the person sets a key (§8.1), then **Start** on the card.
+  never opens its API server and she cannot reach it — …` → the person sets a key (§8.1); a gateway already running
+  reads it only at its start, so stop it (`hermes gateway stop`, or end `hermes.exe`), then **Start** on the card.
+  The card offers **Start** only while nothing answers (not for a helper that refuses tasks, rejects the key or has
+  no model: that one is running already).
   The Hermes home is found from the autostart's env `HERMES_HOME`, its `cwd`, the folder above `bin\hermes.exe`,
   `HERMES_HOME`, then `%LOCALAPPDATA%\hermes`; a key set in `config.yaml` (`gateway.api_server`) is not checked.
 - `-- hermes key  HERMES_API_KEY in config/tools.json is not set yet: …` (the example's placeholder) or `-- hermes key
