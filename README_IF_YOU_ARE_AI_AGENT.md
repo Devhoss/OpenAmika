@@ -231,6 +231,8 @@ cd OpenAmika
 All commands below run from that folder (`C:\OpenAmika`). PowerShell runs nothing from the current folder by bare
 name: a `.bat` there is `.\Start_OpenAmika.bat`, and a `.ps1` runs as `powershell -ExecutionPolicy Bypass -File …`
 (Windows' default execution policy refuses `scripts\setup_windows.ps1` typed alone).
+Clone rather than `Code → Download ZIP`: the ZIP unpacks into a nested folder (`OpenAmika-main\OpenAmika-main`),
+and Windows Defender quarantined it on download in the first days (§9).
 
 ### 5.2 Her brain, ears, memory and eyes
 
@@ -264,7 +266,8 @@ Done. Next:
 Measured on a fresh clone (Windows 11, RTX 5080, fast connection): about 15 minutes, most of it the CUDA torch wheel
 (2.9 GB, downloaded once and reused from pip's cache by the other environments), SenseVoiceSmall (from ModelScope)
 and the two Hugging Face models (public models: no token needed; the Hub's "unauthenticated requests" notice is
-silenced). A second run with everything in place takes about a minute.
+silenced; a free read token in `HF_TOKEN` makes the Hub serve them at full speed, §9). A second run with everything
+in place takes about a minute.
 
 - Marks: `OK` done, `--` skipped or informational, `!!` failed (the text says how to fix it). Exit code 0, 1 with any
   `!!`, 130 after Ctrl+C. Dependent steps of a failed one show `-- … skipped: needs X, which did not finish`.
@@ -769,6 +772,68 @@ dialogue** card still show everything.
 ## 9. Troubleshooting
 
 Start with `envs\brain\Scripts\python.exe launch.py --check`, then `logs\<name>.log` of the red row.
+
+**Seen most often in the first days** (the MekaHime Discord's #openamika channel and help desk, 2026-11-05 onward;
+each entry below was checked against the code):
+
+- **The ZIP instead of the clone.** `Code → Download ZIP` (`OpenAmika-main.zip`) and the v1.0.0 release zip unpack
+  into a nested folder (`…\Downloads\OpenAmika-1.0.0\OpenAmika-1.0.0`, `OpenAmika-main\OpenAmika-main`): from the
+  outer folder `The argument 'scripts\setup_windows.ps1' to the -File parameter does not exist` and, later, `The term
+  'envs\brain\Scripts\python.exe' is not recognized …` → `cd` into the inner folder, or move it to `C:\OpenAmika`
+  (§5.1); better, clone. The v1.0.0 zip also carries the older README with Miniconda steps (`conda create -y -p
+  envs\brain python=3.11`): `'conda' is not recognized as an internal or external command` and Anaconda's terms prompt
+  belong to that guide, not to her → follow the current README; conda is not needed (`setup_windows.ps1` makes the
+  environments; conda ones already made are used as they are, §5.2).
+- **Windows Defender quarantines the ZIP on download** (`Trojan:Script/Sabsik.FL.A!ml`, also seen as
+  `Trojan:Script/Wacatac.B!ml`; Chrome may block the same download; 2026-11-05/06, GitHub issue #2) → a cloud
+  heuristic verdict on the scripts (the IoT admin script's download-then-install-a-driver step is the likely trigger),
+  not malware: MekaHime's own Defender scans of the same ZIP found nothing, and by 11-07 the download passed again.
+  Clone with git instead; a quarantined copy can be restored under Windows Security → Protection history. Never add an
+  antivirus exclusion for the person; let them decide.
+- **Downloads crawl at ~50 KB/s** during `setup_windows.ps1` (`BAAI/bge-m3`, `Qwen/Qwen3-VL-2B-Instruct`) or
+  `setup_tts.py` → Hugging Face throttles unauthenticated downloads and refuses them past a quota (HTTP 429). A free
+  read token lifts it: `$env:HF_TOKEN = "hf_..."` in the same window before the setup (huggingface.co/settings/tokens;
+  `huggingface_hub` reads the variable, `setup_tts.py` says where its token came from). Check it is not the line itself
+  first (one "slow setup" was a game updating in the background). SenseVoiceSmall comes from ModelScope, unaffected.
+- **`ERROR: [Errno 13] error while attempting to bind on address ('127.0.0.1', 53000): an attempt was made to access a
+  socket in a way forbidden by its access permissions`** (in the dashboard's speech row or `logs\speech.log`; the
+  browser never opens; `launch.py --check` still says the port is free, because it only connects) → Windows reserved
+  that port for Hyper-V / WSL2 / Docker Desktop: `netsh interface ipv4 show excludedportrange protocol=tcp` lists the
+  ranges. Set `chat_port` in `settings.json` to a port outside them (ports below 49152 rarely are) and start again:
+  the URL she opens, `Stop_OpenAmika.ps1` and `Tailscale_Serve_OpenAmika.bat` all read `chat_port`. The same error
+  on 5202, 8011, 8014 or 8002 → `brain_port`, `embedder.port`, `vision.port`, the TTS port (§6). (`net stop winnat`
+  then `net start winnat` as administrator frees the dynamic ranges until the next reboot; the new port is the
+  lasting fix.)
+- **The key is pasted, but the light says `OpenRouter key  no key saved`** (or `launch.py --check`: `-- API keys  no
+  OpenRouter key yet`) → the brain saves it into `brain/.env` and applies it at once (§5.4). Look (never print) for a
+  line `OPENROUTER_API_KEY=…` in `brain/.env`: present → stop her and start her again (the light caught up after a
+  restart for everyone who reported this); absent → the brain was not answering when it was saved: paste it on
+  Setup → Brain, or put it in the file by hand.
+- **The key is saved, and every reply is an error.** Three causes seen: the OpenRouter account has **no credits** (a
+  key alone is not enough; OpenRouter is prepaid: people added $5–10 and she answered; the Use page's *Session cost*
+  tile stays at 0 until then); a model chosen on Setup → Brain that **OpenRouter no longer offers** (one person had
+  picked a `qwen3-235b` entry that had left the catalog) → Setup → Brain → *Switch back to the OpenRouter preset*;
+  an error right after **switching models or keys** → stop her and start her again. OpenRouter's own answer is in
+  `logs\brain.log`.
+- **Fully Local with a model under 27B** (`qwen3:4b-instruct` and `qwen3:14b` were the ones tried) → she says only her
+  catchphrase ("You Holy Big Fat Ass"), answers in one line, gets stuck on one subject, **switches to Chinese** in
+  the middle of a conversation (her prompts are Chinese; a weak model drifts into them), or takes 10 s a reply → not a
+  fault to debug: §5.4 (27B or more, or Semi-Local). On a 16 GB card or less Fully Local is not an option; Semi-Local
+  is.
+- **No NVIDIA card** (AMD, Intel, Apple) → her ears, memory and voice need CUDA for speed, not for correctness:
+  `--cpu` for both setups (§5.6), eyes off. Whether Ollama uses an AMD card is Ollama's own business (its ROCm
+  builds), separate from her parts. Otherwise the hosted version at mekahime.com/amika.
+- **Linux** → unsupported (§5.6), but one person ran her there (on a PS5 running Linux): `python scripts/setup_core.py`
+  directly (no `.ps1`, no `.bat`), `HF_TOKEN` exported, the interpreters in `settings.json` pointed at
+  `envs/<name>/bin/python`, then `python launch.py`. Expect to fix paths yourself.
+- **The console closes before the error can be read** (`Start_OpenAmika.bat` double-clicked) → run it from a
+  PowerShell window in the folder (`.\Start_OpenAmika.bat`) after stopping any earlier instance: the dashboard names
+  the red row and its `logs\<name>.log`.
+- **Her voice spells an all-caps word letter by letter** (`YOUR` → Y-O-U-R) → the voice engine reads capitals as an
+  acronym; it is the LLM writing in capitals, not the setup. A pronunciation rule in `config/word_replace.json`
+  (`llm_to_tts`: `{"from": "YOUR", "to": "your", "ci": false}`) catches a word that keeps coming back.
+- **Any drive is fine**: `D:\OpenAmika` works like `C:\OpenAmika` (the launchers use their own folder, `%~dp0`); only
+  the path's length and OneDrive matter (§5).
 
 **Setup (`setup_windows.ps1` / `setup_core.py`)**
 
